@@ -25,3 +25,28 @@ independent byte code. Objects are stored in Packages that can be installed
 on the PDA or run using the byte code interpreter.
 
 ...
+
+```
+dyn/
+  types.h
+  objects.h
+  refs.h
+  io/
+    package.h
+    stream.h
+  lang/
+    compiler.h
+    interpreter.h
+    decompiler.h
+```
+
+```
+dyn/os
+dyn/ui/widgets
+dyn/io/soups
+```
+```
+dyn/pda
+dyn/pda/launcher
+dyn/pda/notepad
+```
