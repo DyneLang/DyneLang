@@ -34,4 +34,4 @@
 # CMake and stuff
 build
 .vscode
-*/.DS_Store
+**/.DS_Store
