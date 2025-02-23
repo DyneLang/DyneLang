@@ -317,17 +317,6 @@ constexpr Ref kRefArray { kSymArray };
 
 // TODO: move these into their own header
 
-
-
-
-
-constexpr DyneErr kNSErrBaseFrames = -48000;  // Frames errors
-
-constexpr DyneErr kNSErrObjectReadOnly  = kNSErrBaseFrames - 214;  // Object is read-only
-constexpr DyneErr kNSErrNotAFrame       = kNSErrBaseFrames - 400;  // Expected a frame
-constexpr DyneErr kNSErrNotAnArray      = kNSErrBaseFrames - 401;  // Expected an array
-constexpr DyneErr kNSErrNotASymbol      = kNSErrBaseFrames - 410;  // Expected a symbol
-
 class RuntimeError : public std::runtime_error
 {
 protected:

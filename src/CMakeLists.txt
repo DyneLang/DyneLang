@@ -33,6 +33,8 @@ list(APPEND dynec_srcs
 )
 
 list(APPEND dynec_hdrs
+    include/dyn/exceptions.h
+    include/dyn/errors.h
     include/dyn/objects.h
     include/dyn/ref.h
     include/dyn/types.h

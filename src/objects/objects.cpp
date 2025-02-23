@@ -24,6 +24,7 @@
 
 #include <dyn/objects.h>
 #include <dyn/io/print.h>
+#include <dyn/errors.h>
 
 #include <cassert>
 
@@ -192,11 +193,11 @@ Ref dyn::AllocateFrame()
 void dyn::SetFrameSlot(RefArg obj, RefArg tag, RefArg value)
 {
   if (!obj.IsFrame())
-    throw BadTypeWithFrameData(kNSErrNotAFrame);
+    throw BadTypeWithFrameData(kDyneErrNotAFrame);
   if (obj.IsReadOnly())
-    throw FramesWithBadValue(kNSErrObjectReadOnly);
+    throw FramesWithBadValue(kDyneErrObjectReadOnly);
   if (!tag.IsSymbol())
-    throw BadTypeWithFrameData(kNSErrNotASymbol);
+    throw BadTypeWithFrameData(kDyneErrNotASymbol);
   Frame *frame = static_cast<Frame*>(obj.GetObject());
   frame->SetSlot(tag, value);
 }
@@ -282,9 +283,9 @@ bool dyn::IsReadOnly(RefArg ref)
 Index dyn::AddArraySlot(RefArg array_ref, RefArg value)
 {
   if (!array_ref.IsArray())
-    throw BadTypeWithFrameData(kNSErrNotAnArray);
+    throw BadTypeWithFrameData(kDyneErrNotAnArray);
   if (IsReadOnly(array_ref))
-    throw FramesWithBadValue(kNSErrObjectReadOnly);
+    throw FramesWithBadValue(kDyneErrObjectReadOnly);
 
   Array *array = static_cast<Array*>(array_ref.GetObject());
   return array->AddSlot(value);
