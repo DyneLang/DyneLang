@@ -180,12 +180,6 @@ protected:
 
 public:
 
-//  constexpr Object(Tag tag, Ref class_or_map, uint32_t num_slots, const Ref *values)
-//  : t { tag, 0x10 },
-//    size_{ static_cast<uint32_t>(num_slots*sizeof(Ref)) },
-//    frame { class_or_map, (Ref*)values, 0 }
-//  { }
-
   constexpr Object(const char *str);
   Object(const std::string &str);
   constexpr Object(Real value);

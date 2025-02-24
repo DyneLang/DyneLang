@@ -30,107 +30,64 @@
 namespace dyn {
 
 namespace io {
-
-class PrintState;
-
+  class PrintState;
 } // namespace io
-
-constexpr int kRefTagBits = 2;
-constexpr int kRefValueBits = sizeof(uintptr_t) * 8 - kRefTagBits;
-constexpr uintptr_t kRefValueMask = (~(uintptr_t)0) << kRefTagBits;
-constexpr uintptr_t kRefTagMask = ~kRefValueMask;
-constexpr int kRefImmedBits = 2;
-constexpr uintptr_t kRefImmedMask = (~(uintptr_t)0) << kRefImmedBits;
-
-constexpr uint32_t kTagPointer  = 0;
-constexpr uint32_t kTagInteger  = 1;
-constexpr uint32_t kTagImmed    = 2;
-constexpr uint32_t kTagMagicPtr = 3;
-
-constexpr int nBits = 30;
-
-#ifndef __BYTE_ORDER__
-#error byte order not defined
-#endif
 
 class Ref
 {
-public:
-  enum class Tag: uint8_t {
-    pointer, integer, immed, magic
-  };
-
-  enum class Type: uint8_t {
-    special, unichar, boolean, reserved
-  };
-
 private:
-  typedef struct {
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    Tag tag_:kRefTagBits;
-    Integer value_:kRefValueBits;
-#else
-    Integer value_:kRefValueBits;
-    Tag tag_:kRefTagBits;
-#endif
-  } Value;
-
-  typedef struct {
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    Tag tag_:kRefTagBits;
-    Type type_:kRefImmedBits;
-    uintptr_t value_:kRefValueBits-kRefImmedBits;
-#else
-    uintptr_t value_:kRefValueBits-kRefImmedBits;
-    Type type_:kRefImmedBits;
-    Tag tag_:kRefTagBits;
-#endif
-  } Immed;
-
   union {
-    uintptr_t t;
-    Value v;
-    Immed i;
-//  Magic table:18, index:12, Tag:2
-    Object *o;
+    uintptr_t r_;
+    Object*   o_;
   };
+
+  static constexpr uint8_t kTagPointer    = 0x00;
+  static constexpr uint8_t kTagInteger    = 0x01;
+  static constexpr uint8_t kTagImmed      = 0x02;
+  static constexpr uint8_t kTagMagicPtr   = 0x03;
+  static constexpr uint8_t kTagMask       = 0x03;
+  static constexpr uint8_t kTagBits       = 2;
+  static constexpr uint8_t kTagShift      = 2;
+  static constexpr uint8_t kTagValueBits  = sizeof(uintptr_t)*4-kTagShift;
+
+  static constexpr uint8_t kImmedSpecial  = 0x00;
+  static constexpr uint8_t kImmedChar     = 0x04;
+  static constexpr uint8_t kImmedBoolean  = 0x08;
+  static constexpr uint8_t kImmedReserved = 0x0c;
+  static constexpr uint8_t kImmedMask     = 0x0c;
+  static constexpr uint8_t kImmedBits     = 2;
+  static constexpr uint8_t kImmedShift    = 4;
+  static constexpr uint8_t kImmedValueBits = sizeof(uintptr_t)*4-kImmedShift;
+
+  uint8_t   tag_() const          { return r_ & kTagMask; }
+  intptr_t  tag_value_() const    { return static_cast<intptr_t>(r_) >> kTagShift; }
+  uint8_t   immed_() const        { return r_ & kImmedMask; }
+  uintptr_t immed_value_() const  { return static_cast<uintptr_t>(r_) >> kImmedShift; }
 
 public:
 
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  constexpr Ref() : i { Tag::immed, Type::special, 0 } { };
-  constexpr Ref(Type type, Integer ival) : i { Tag::immed, type, (unsigned long)ival } { };
-  constexpr Ref(Integer i) : v { Tag::integer, i } {}
-  constexpr Ref(int i) : v { Tag::integer, (Integer)i } {}
-  constexpr Ref(UniChar u) : i { Tag::immed, Type::unichar, u } {}
-#else
-  constexpr Ref() : i { 0, Type::special, Tag::immed } { };
-  constexpr Ref(Type type, Integer ival) : i { (unsigned long)ival, type, Tag::immed } { };
-  constexpr Ref(Integer i) : v { (unsigned long)i, Tag::integer } {}
-  constexpr Ref(int i) : v { (unsigned long)i, Tag::integer } {}
-  constexpr Ref(UniChar u) : i { u, Type::unichar, Tag::immed } {}
-#endif
-  constexpr Ref(const Object &obj): o(const_cast<Object*>(&obj)) { }
-  constexpr Ref(Object *obj): o(obj) { }
+  using Verbatim_ = uintptr_t;
+  constexpr Ref(Verbatim_ r)        : r_{ r } { };
+  constexpr Ref()                   : r_ { 0x000FFFF2 } { };
+  constexpr Ref(Integer i)          : r_{ (((uintptr_t)i)<<kTagShift)|kTagInteger } {}
+  constexpr Ref(int i)              : r_{ (((uintptr_t)i)<<kTagShift)|kTagInteger } {}
+  constexpr Ref(UniChar u)          : r_{ (((uintptr_t)u)<<kImmedShift)|kTagMask|kImmedChar } {}
+  constexpr Ref(int table, int ix)  : r_{ (((uintptr_t)table)<<14) | (((uintptr_t)ix)<<kTagShift)|kTagMagicPtr } {}
+  constexpr Ref(Boolean i)          : r_{ (uintptr_t)(i ? 0x1a : 0x02) } {}
+  constexpr Ref(const Object &obj)  : o_{ const_cast<Object*>(&obj) } { }
+  constexpr Ref(Object *obj)        : o_{ obj } { }
 
-//  constexpr Ref(const Ref &other) { i = other.i; }
-//  Ref(Ref &&other);
-//  Ref &operator=(const Ref &other);
-//  Ref &operator=(Ref &&other);
-//  ~Ref() = default;
-//  void Assign(Integer i);
-//  Boolean IsInteger();
-//
-//  Ref(Object *o): v { ((unsigned long)o)>>kRefTagBits, Tag::pointer } { }
-//  void Assign(ObjectPtr o);
-//  Boolean IsObject();
-//
-//  constexpr Ref(Object &o): ref_(&o) { o.read_only_ = false; o.incr_ref_count(); }
-//
-//  void AddArraySlot(RefArg value) const;
-  constexpr bool operator==(const Ref &other) const { return t == other.t; }
-
-  constexpr bool IsPtr() const { return (v.tag_ == Tag::pointer); }
+  // --- move new style w/information hiding here
+  constexpr bool operator==(const Ref &other) const { return r_ == other.r_; }
+  constexpr bool IsPtr() const        { return (r_&0x03)==0x00; }
+  constexpr bool IsInt() const        { return (r_&0x03)==0x01; }
+  constexpr bool IsBoolean() const    { return IsTrue() || IsFalse(); }
+  constexpr bool IsTrue() const       { return r_==0x1a; }
+  constexpr bool IsFalse() const      { return IsNIL(); }
+  constexpr bool IsNIL() const        { return r_==0x02; }
+  constexpr bool IsNotNIL() const     { return !IsNIL(); }
+  constexpr bool IsChar() const       { return (r_&0x0f)==0x06; }
+  constexpr bool IsMagicPtr() const   { return (r_&0x03)==0x03; }
 
   bool IsBinary() const;
   bool IsArray() const;
@@ -138,22 +95,69 @@ public:
   bool IsSymbol() const;
   bool IsReadOnly() const;
 
-  Object *GetObject() const { return IsPtr() ? o : nullptr; }
+  Object *GetObject() const { return IsPtr() ? o_ : nullptr; }
 
   int Print(dyn::io::PrintState &ps) const;
+
+
+  //extern  bool    IsRealPtr(Ref r);
+  
+  static const Ref kWeakArrayClass;
+  static const Ref kFaultBlockClass;
+  static const Ref kFuncClass;
+  static const Ref kBadPackageRef;
+  static const Ref kUnstreamableObject;
+  static const Ref kSymbolClass;
+  static const Ref kPlainFuncClass;
+  static const Ref kPlainCFunctionClass;
+  static const Ref kBinCFunctionClass;
 };
 
-constexpr Ref RefNIL;
-constexpr Ref RefTRUE { Ref::Type::boolean, 1 };
-constexpr Ref RefSMILE { U'😀' };
-constexpr Ref RefPYTHON { 42 };
-constexpr Ref RefSymbolClass { Ref::Type::special, 0x5555 };
+constexpr Ref RefNIL          { (Ref::Verbatim_)0x00000002 };
+constexpr Ref RefTRUE         { (Ref::Verbatim_)0x0000001a };
+constexpr Ref RefSymbolClass  { (Ref::Verbatim_)0x00055552 };
+constexpr Ref RefUNREF        { (Ref::Verbatim_)0x000FFFF2 };
+
 
 constexpr bool IsPtr(Ref r) { return r.IsPtr(); }
 inline bool IsBinary(Ref r) { return r.IsBinary(); }
 inline bool IsArray(Ref r) { return r.IsArray(); }
 inline bool IsFrame(Ref r) { return r.IsFrame(); }
 
+//inline Ref MakeInt(int i) { return
+
+
+
+
+//int  _RPTRError(Ref r) { ThrowBadTypeWithFrameData(kNSErrNotAPointer, r); return 0; }
+//int  _RINTError(Ref r) { ThrowBadTypeWithFrameData(kNSErrNotAnInteger, r); return 0; }
+//int  _RCHARError(Ref r) { ThrowBadTypeWithFrameData(kNSErrNotACharacter, r); return 0; }
+//
+//Ref    AddressToRef(void * inAddr) { return (Ref) inAddr & kRefValueMask; }
+//void *  RefToAddress(Ref r) { return (void *)(ISINT(r) ? r & kRefValueMask : _RINTError(r)); }
+//int    RefToInt(Ref r) { return RINT(r); }
+//UniChar  RefToUniChar(Ref r) { return RCHAR(r); }
+//inline long  RINT(Ref r)    { return ISINT(r) ? RVALUE(r) : _RINTError(r); }
+//inline UniChar  RCHAR(Ref r)  { return ISCHAR(r) ? (UniChar) RIMMEDVALUE(r) : _RCHARError(r); }
+
+
+//______________________________________________________________________________
+// Macros as Functions
+
+//extern  Ref     MakeInt(int i);
+//extern  Ref     MakeChar(unsigned char c);
+//extern  Ref    MakeBoolean(int val);
+//
+//extern  bool    IsInt(Ref r);
+//extern  bool    IsChar(Ref r);
+//extern  bool    IsPtr(Ref r);
+//extern  bool    IsMagicPtr(Ref r);
+//extern  bool    IsRealPtr(Ref r);
+//
+//extern  Ref    AddressToRef(void *);
+//extern  void *  RefToAddress(Ref r);
+//extern  int    RefToInt(Ref r);
+//extern  UniChar  RefToUniChar(Ref r);
 
 
 } // namespace dyn

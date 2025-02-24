@@ -28,7 +28,6 @@ include(src/objects/CMakeLists.txt)
 include(src/tools/CMakeLists.txt)
 
 list(APPEND dynec_srcs
-    src/dynec.cpp
     src/ref.cpp
 )
 

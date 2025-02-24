@@ -32,13 +32,13 @@
 #include <cassert>
 #include <memory>
 
-
 using namespace dyn::io;
 
 
 /** \class pkg::PartData
- Base class for holding the data in a NewtonScript Package Part
+ Base class for holding the data in a Newton Package Part
  */
+
 
 /**
  Index of this Part in the list of Parts in the Package.
@@ -47,6 +47,7 @@ using namespace dyn::io;
 int PartData::index() {
   return part_entry_.index();
 }
+
 
 /**
  Compare this part with the other part.
@@ -61,9 +62,11 @@ int PartData::compare(PartData &other)
 }
 
 
+
 /** \class pkg::PartDataGeneric
  Holds the uninterpreted data of a Part with raw data or unknown type.
  */
+
 
 /**
  Read the Part of the Package as raw data.
@@ -74,6 +77,7 @@ int PartDataGeneric::load(PackageBytes &p) {
   data_ = p.get_data(part_entry_.size());
   return 0;
 }
+
 
 /**
  Write raw Package Part data in ARM32 assembler format.
@@ -90,11 +94,14 @@ int PartDataGeneric::writeAsm(std::ofstream &f) {
   return part_entry_.size();
 }
 
+
 // MARK: -
+
 
 /** \class pkg::Object
  Any kind of Object from the Dyne Object System.
  */
+
 
 /**
  Create a new Object by peeking at the next three words in the package data.
@@ -130,6 +137,7 @@ std::shared_ptr<Object> Object::peek(PackageBytes &p, uint32_t offset)
     case 3: return std::make_shared<ObjectSlotted>(offset); // Frame
   }
 }
+
 
 /**
  Load the head of an Object; derived class must load the remaining data.
@@ -167,6 +175,7 @@ int Object::load(PackageBytes &p)
   return 0;
 }
 
+
 /**
  If the data is unaligned, load the filler bytes.
  \param[in] p raw package data stream
@@ -180,6 +189,7 @@ void Object::loadPadding(PackageBytes &p, uint32_t start, uint32_t align) {
   uint32_t n = apos - fpos;
   if (n) padding_ = p.get_data(n);
 }
+
 
 /**
  Write the common header data of an NOS object.
@@ -201,6 +211,7 @@ int Object::writeAsm(std::ofstream &f, PartDataNOS &p)
   return 8;
 }
 
+
 /**
  Generate a simple assembler label using the part index and the offset in the package file.
  \param[in] p Part data reference.
@@ -210,6 +221,7 @@ void Object::makeAsmLabel(PartDataNOS &p) {
   ::snprintf(buf, 31, "obj_%d_%d", p.index(), offset_);
   label_ = buf;
 }
+
 
 int Object::compareBase(Object &other)
 {
@@ -233,11 +245,14 @@ int Object::compareBase(Object &other)
   return ret;
 }
 
+
 // MARK: -
+
 
 /** \class pkg::Object
  A Binary Object from the Newton Object System.
  */
+
 
 /**
  Read a binary object form the Package stream.
@@ -250,6 +265,7 @@ int ObjectBinary::load(PackageBytes &p)
   data_ = p.get_data(size_-4);
   return 0;
 }
+
 
 /**
  Write a binary object in assembler code.
@@ -360,6 +376,7 @@ int ObjectBinary::writeAsm(std::ofstream &f, PartDataNOS &p)
   return size_;
 }
 
+
 /**
  Compare objects.
  \param[in] other_obj the other object
@@ -376,6 +393,7 @@ int ObjectBinary::compare(Object &other_obj)
   }
   return ret;
 }
+
 
 dyn::Ref ObjectBinary::toNOS(PartDataNOS &p) {
   if (nos_object_)
@@ -411,11 +429,14 @@ dyn::Ref ObjectBinary::toNOS(PartDataNOS &p) {
   return ret;
 }
 
+
 // MARK: -
+
 
 /** \class pkg::ObjectSymbol
  A Symbol from the Newton Object System.
  */
+
 
 /**
  Read a symbol form the Package stream.
@@ -442,6 +463,7 @@ int ObjectSymbol::load(PackageBytes &p)
 #endif
   return 0;
 }
+
 
 /**
  Write a Symbol in assembler code.
@@ -473,6 +495,7 @@ int ObjectSymbol::writeAsm(std::ofstream &f, PartDataNOS &p)
   f << "\t.asciz\t\"" << ascii_symbol << "\"" << std::endl;
   return size_;
 }
+
 
 /**
  Create an assembler label for this symbol.
@@ -513,6 +536,7 @@ void ObjectSymbol::makeAsmLabel(PartDataNOS &p) {
   }
 }
 
+
 /**
  Compare objects.
  \param[in] other_obj the other object
@@ -534,6 +558,7 @@ int ObjectSymbol::compare(Object &other_obj)
   return ret;
 }
 
+
 dyn::Ref ObjectSymbol::toNOS(PartDataNOS &) {
   if (nos_object_)
     return dyn::Ref(nos_object_);
@@ -547,9 +572,11 @@ dyn::Ref ObjectSymbol::toNOS(PartDataNOS &) {
 
 // MARK: -
 
+
 /** \class pkg::ObjectSlotted
  A Slotted Object (Frame or Array) from the Newton Object System.
  */
+
 
 /**
  Read a slotted object (Frame or Array) form the Package stream.
@@ -565,6 +592,7 @@ int ObjectSlotted::load(PackageBytes &p)
   }
   return 0;
 }
+
 
 /**
  Write a slotted object (a Form or an Array) in assembler code.
@@ -589,6 +617,7 @@ int ObjectSlotted::writeAsm(std::ofstream &f, PartDataNOS &p)
   return size_;
 }
 
+
 /**
  Compare objects.
  \param[in] other_obj the other object
@@ -605,6 +634,7 @@ int ObjectSlotted::compare(Object &other_obj)
   }
   return ret;
 }
+
 
 dyn::Ref ObjectSlotted::toNOS(PartDataNOS &p) {
   if (nos_object_)
@@ -645,9 +675,11 @@ dyn::Ref ObjectSlotted::toNOS(PartDataNOS &p) {
 
 // MARK: -
 
+
 /** \class pkg::ObjectMap
  An Array of Symbols, as used by the Frame Object to create named indexing.
  */
+
 
 /**
  Write a Frame lookup map object in assembler code.
@@ -681,6 +713,7 @@ int ObjectMap::writeAsm(std::ofstream &f, PartDataNOS &p)
   return size_;
 }
 
+
 // TODO: supermaps!
 uint32_t ObjectMap::symbol_at(int index)
 {
@@ -690,6 +723,7 @@ uint32_t ObjectMap::symbol_at(int index)
   return ref_list_[index+1];
 }
 
+
 dyn::Ref ObjectMap::toNOS(PartDataNOS &p) {
   return ObjectSlotted::toNOS(p);
 }
@@ -697,9 +731,11 @@ dyn::Ref ObjectMap::toNOS(PartDataNOS &p) {
 
 // MARK: -
 
+
 /** \class pkg::PartDataNOS
  All the data in a NOS Part of the Package.
  */
+
 
 /**
  Read the NOS Part of the Package as a list of Objects.
@@ -733,6 +769,7 @@ int PartDataNOS::load(PackageBytes &p) {
   return 0;
 }
 
+
 /**
  Write NOS Package Part data in ARM32 assembler format.
  \param[in] f output stream
@@ -762,6 +799,7 @@ int PartDataNOS::writeAsm(std::ofstream &f) {
   f << "@ ===== Part " << part_entry_.index() << " End" << std::endl << std::endl;
   return part_entry_.size();
 }
+
 
 /**
  Return the start of an assembler line that will produce the given Ref.
@@ -804,6 +842,7 @@ std::string PartDataNOS::asmRef(uint32_t ref)
   }
   return std::string(buf);
 }
+
 
 /**
  Return a symbol from a reference.
@@ -856,6 +895,7 @@ bool PartDataNOS::addLabel(std::string label, ObjectSymbol *symbol) {
   }
 }
 
+
 /**
  Compare this NOS part with the other NOS part.
  \param[in] other_part the other part which must be NOS as well
@@ -883,18 +923,19 @@ Object *PartDataNOS::object_at(uint32_t offset)
   return object_list_[offset&~3].get();
 }
 
+
 /**
  Convert this part of the package into a Newton OS object tree.
  \return the object tree or an error code as an integer
  */
 dyn::Ref PartDataNOS::toNOS()
 {
-  // Mark all objects as not yet written
+  // Mark all objects as not yet written.
   for (auto &obj: object_list_)
     obj.second->mark(false);
 
-  // the first object must be an array with one element that is the root of the tree
-  // TODO: many assumptions, no error checking!
+  // The first object must be an array with one element that is the root of 
+  // the tree.
   auto root_it = object_list_.begin();
   ObjectSlotted *root_obj = static_cast<ObjectSlotted*>(root_it->second.get());
   root_obj->mark(true);
@@ -902,7 +943,8 @@ dyn::Ref PartDataNOS::toNOS()
   Object *data_obj = object_at(data_ref);
   dyn::Ref nos_form = data_obj->toNOS(*this);
 
-  // count the objects that were not written
+#if 0
+  // Count the objects that were not written.
   int unmarked = 0;
   for (auto &obj: object_list_) {
     if (!obj.second->marked()) {
@@ -912,9 +954,11 @@ dyn::Ref PartDataNOS::toNOS()
   }
   if (unmarked > 0)
     std::cout << "WARNING: " << unmarked << " objects not converted!" << std::endl;
-
+#endif
+  
   return nos_form;
 }
+
 
 dyn::Ref PartDataNOS::refToNOS(uint32_t ref) {
 //  static char buf[80];
@@ -923,23 +967,49 @@ dyn::Ref PartDataNOS::refToNOS(uint32_t ref) {
       int32_t s = static_cast<int32_t>(ref);
       dyn::Integer v = (dyn::Integer(s))/4;
       return dyn::Ref(v); }
-    case 1: // pointer
-      return object_at(ref)->toNOS(*this);
+    case 1: { // pointer
+      Object *obj = object_at(ref);
+      if (obj)
+        return object_at(ref)->toNOS(*this);
+      else
+        std::cout << "WARNING: Invalid reference to offset " << (ref&~3) << "." << std::endl;
+      return dyn::RefUNREF; }
     case 2: // special
-      if (ref == 2) {
-        return dyn::RefNIL;
-      } else if (ref == 0x1a) {
-        return dyn::RefTRUE;
-      } else if ((ref & 15) == 10) {
-        return dyn::Ref(static_cast<dyn::UniChar>(ref>>4));
-      } else {
-        // TODO: special
-//        ::snprintf(buf, 79, ".int\t0x%08x", ref);
-        return dyn::RefNIL;
+      switch (ref & 0x0c) {
+        case 0x00: // special
+          if (ref == 2) {
+            return dyn::RefNIL;
+          } else if (ref == 0x0032) {
+            return dyn::Ref::kPlainFuncClass;
+          } else if (ref == 0x0132) {
+            return dyn::Ref::kPlainCFunctionClass;
+          } else if (ref == 0x0232) {
+            return dyn::Ref::kBinCFunctionClass;
+          } else {
+            std::cout << "WARNING: Unknown special Ref " << ref
+            << ", 0x" << std::setw(8) << std::setfill('0') << std::hex << ref << std::dec
+            << "." << std::endl;
+            return dyn::Ref(dyn::Ref::Verbatim_(ref));
+          }
+        case 0x04: // char
+          return dyn::Ref(static_cast<dyn::UniChar>(ref>>4));
+        case 0x08: // boolean
+          if (ref == 0x1a) {
+            return dyn::RefTRUE;
+          } else {
+            std::cout << "WARNING: Unsupported boolean reference " << ref
+            << ", 0x" << std::setw(8) << std::setfill('0') << std::hex << ref << std::dec
+            << "." << std::endl;
+            return dyn::Ref(dyn::Ref::Verbatim_(ref));
+          }
+        case 0x0c: // reserved
+          std::cout << "WARNING: Resereved reference " << ref
+          << ", 0x" << std::setw(8) << std::setfill('0') << std::hex << ref << std::dec
+          << "." << std::endl;
+          return dyn::Ref(dyn::Ref::Verbatim_(ref));
       }
-      break;
-    case 3: // TODO: magic
-      return dyn::Ref(static_cast<dyn::Magic>(ref>>4));
+    case 3: // Make Magic Pointer
+      return dyn::Ref(ref>>14, (ref>>4)&0xfff);
   }
-  return dyn::RefNIL;
+  return dyn::RefUNREF;
 }

@@ -30,31 +30,54 @@
 
 using namespace dyn::io;
 
+
 /** \class pkg::Package
- Read, store, and write the binary data in NewtonScript Package format.
+ Read, store, and write the binary data in Newton Package format.
+
+ This class stores a binary representation of a Newton Package. It can read
+ and verify packages, and write them back as ARM assembler files that can be
+ compiled back into the exact same package file. It can also generate a Dyne 
+ object strcuture.
  */
+
 
 /**
  Load the entire package and store the content in memory.
  \param[in] p package data stream
  \return 0 if succeeded
  */
-int Package::load() {
+int Package::load() 
+{
+  // Check if a filename was set already (see `load(filename)`).
   if (!pkg_bytes_) {
     std::cout << "ERROR: package bytes not initialized.\n";
     return -1;
   }
+  // Check if any data was read.
   if (!pkg_bytes_->size()) {
     std::cout << "ERROR: no package bytes loaded, size is 0.\n";
     return -1;
   }
+
+  // Read the package directory:
+
+  // Read the signature and check if it is a valid package. We currently support
+  // package0 and package1 for classic NewtonOS 1.x and NewtonOS 2.x.
   pkg_bytes_->rewind();
   signature_ = pkg_bytes_->get_cstring(8, false);
   if ((signature_ != "package0") && (signature_ != "package1")) {
     std::cout << "ERROR: unknown signature \"" << signature_ << "\"\n";
     return -1;
   }
+  // Read reserved1, often `xxxx`.
   type_ = pkg_bytes_->get_cstring(4, false);
+  // Read the flags, needed to know about object alignment and more.
+  // kAutoRemoveFlag            = 0x80000000
+  // kCopyProtectFlag           = 0x40000000
+  // kNoCompressionFlag         = 0x10000000
+  // kRelocationFlag            = 0x04000000
+  // kUseFasterCompressionFlag  = 0x02000000
+  // Schlumberger flag          = 0x01000000
   flags_ = pkg_bytes_->get_uint();
   if (flags_ & 0x08ffffff)
     std::cout << "WARNING: unknown flag: "
@@ -62,11 +85,14 @@ int Package::load() {
     << (flags_ & 0x08ffffff) << std::endl;
   if (flags_ & 0x01000000)
     std::cout << "INFO: Package certified to run on Schlumberger Watson." << std::endl;
+  // User defined version number that increments for newer versions.
   version_ = pkg_bytes_->get_uint();
+  // A UTF16 string that contains the copyright message, may be emty.
   copyright_start_ = pkg_bytes_->get_ushort();
   if (copyright_start_ != 0)
     std::cout << "WARNING: Copyright offset should be 0.\n";
   copyright_length_ = pkg_bytes_->get_ushort();
+  // A UTF16 string that contains the name of the package.
   name_start_ = pkg_bytes_->get_ushort();
   // TODO: the following is a bad assumption and creates a wrong offset by using the wrong labels
   if (name_start_ != copyright_start_ + copyright_length_)
@@ -75,6 +101,7 @@ int Package::load() {
   name_length_ = pkg_bytes_->get_ushort();
   if (name_length_ == 0)
     std::cout << "WARNING: Name length can't be 0.\n";
+  // The total size in bytes of the package.  
   size_ = pkg_bytes_->get_uint();
   if (size_ < pkg_bytes_->size())
     std::cout << "WARNING: size entry does not match file size (" << size_ << "!=" << pkg_bytes_->size() << ").\n";
@@ -82,23 +109,34 @@ int Package::load() {
     std::cout << "ERROR: expected size is less than file size, file is cropped (" << size_ << "!=" << pkg_bytes_->size() << ").\n";
     return -1;
   }
+  // The time and date the package was created.
   date_ = pkg_bytes_->get_uint();
+  // `reserved2_` is documented as 0, but it is set in many packages, and seems
+  // to be holding the "Modification Data".
   reserved2_ = pkg_bytes_->get_uint();
-//  TODO: this field is documented as 0, but it is set in many packages, and seem to be holding the "Modification Data"
-//  if (reserved2_ != 0)
-//    std::cout << "WARNING: Reserved2 should be 0, but it is " << reserved2_ << " = 0x"
-//    << std::setw(8) << std::setfill('0') << std::hex << reserved2_ << std::dec << ".\n";
+#if 0
+  if (reserved2_ != 0)
+    std::cout << "WARNING: Reserved2 should be 0, but it is " << reserved2_ << " = 0x"
+    << std::setw(8) << std::setfill('0') << std::hex << reserved2_ << std::dec << ".\n";
+#endif
+  // reserved3_ is documented as 0.
   reserved3_ = pkg_bytes_->get_uint();
   if (reserved3_ != 0)
     std::cout << "WARNING: Reserved3 should be 0.\n";
+  // The size in bytes of the package directory including package headers and 
+  // the variable data area, but not the optional relocation area.  
   directory_size_ = pkg_bytes_->get_uint();
   num_parts_ = pkg_bytes_->get_uint();
   if (num_parts_ > 32)
     std::cout << "WARNING: Unlikely number of parts (" << num_parts_ << ").\n";
+
+  // Read the part headers, giving us information about each part.
   for (int i = 0; i < (int)num_parts_; ++i) {
     part_.push_back(std::make_shared<PartEntry>(i));
     part_[i]->load(*pkg_bytes_);
   }
+
+  // Read the variable data area for the package header.
   vdata_start_ = pkg_bytes_->tell();
   if (copyright_length_) {
     copyright_ = pkg_bytes_->get_ustring(copyright_length_/2-1);
@@ -106,30 +144,45 @@ int Package::load() {
   if (name_length_) {
     name_ = pkg_bytes_->get_ustring(name_length_/2-1);
   }
+  // Read the variable data for every part in the Package.
   for (auto &part: part_) part->loadInfo(*pkg_bytes_);
   // NTK sneaks a message into the variable data area after the last info
-  // and before the relocation data and parts start.
+  // and before the relocation data and parts start. For example:
   // "Newton™ ToolKit Package © 1992-1997, Apple Computer, Inc."
   info_length_ = directory_size_ - pkg_bytes_->tell(); // 58 bytes + 2 bytes padding
   info_ = pkg_bytes_->get_data(info_length_);
-//  std::string info((char*)&info_[0], info_length_);
-//  std::cout << "PackageInfo: " << info << std::endl;
+#if 0  
+  std::string info((char*)&info_[0], info_length_);
+  std::cout << "PackageInfo: " << info << std::endl;
+#endif
 
-  // Relocation Data if kRelocationFlag is set
+  // Read relocation data part if `kRelocationFlag` is set.
   if (flags_ & 0x04000000) {
     relocation_data_.load(*pkg_bytes_);
-//    std::cout << "WARNING: Relocation Data not supported." << std::endl;
+#if 0
+    std::cout << "WARNING: Relocation Data not supported." << std::endl;
+#endif
   }
 
-  // Part Data
+  // Finally, read the Part Data for every part in the Package.
   for (auto &part: part_) part->loadPartData(*pkg_bytes_);
-
   return 0;
 }
 
+
 /**
  Write the Package in ARM32 assembler format.
- \todo The output is not yet symbolic. Absolute values are used
+
+  The assembler file can be carefully modified to fix bugs in the package and
+  add features. It can then be assembled into a data block using:
+  - `arm-none-eabi-as -march=armv4 -mbig-endian package.s -o package.o`
+  Dumping the data part of the object file creates a binary package file:
+  - `arm-none-eabi-objcopy -O binary -j .data package.o -o package.pkg`
+
+  Numeric values are generated using labels and symbols in the assembler file,
+  so that adding data will correctly update values and rearrange the following
+  data.
+
  \param[in] f output stream
  \return number of bytes written
  */
@@ -223,8 +276,13 @@ int Package::writeAsm(std::ofstream &f) {
   return bytes;
 }
 
+
 /**
  Compare the package with the other package.
+
+ Data is compared byte-by-byte, even in filler bytes that arrange data to 4 byte 
+ or 8 byte boundaries, which is not relevant for execution.
+
  \param[in] other the other package
  \return 0 if they are the same.
  */
@@ -375,6 +433,7 @@ int Package::writeAsm(const std::string &assembler_file_name)
   return 0;
 }
 
+
 /**
  Compare this package byte-by-byte to another package file.
  \param[in] other_package_file file path and name of the contender
@@ -404,8 +463,12 @@ int Package::compareFile(const std::string &other_package_file) {
   return -1;
 }
 
+
 /**
- Compare this package to the the contents of another package file.
+ Compare this package to the contents of another package file.
+
+ This compares the package data, ignoring the contents of alignment bytes.
+
  \param[in] other_package_file file path and name of the contender
  \return 0 if file content creates the same binary representation
  */
@@ -417,6 +480,7 @@ int Package::compareContents(const std::string &other_package_file) {
   }
   return compare(other);
 }
+
 
 /**
  Convert this package into a Dyne object tree.

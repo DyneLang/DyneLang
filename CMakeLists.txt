@@ -42,6 +42,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(GTest REQUIRED)
+# brew install googletest
+
 set(dynec_srcs)
 set(dynec_hdrs)
 set(dynec_cmake CMakeLists.txt)
@@ -58,12 +61,15 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}
   ${dynec_srcs}
   ${dynec_hdrs}
   ${dynec_cmake}
+  src/dynec.cpp
+  test/test.cpp
 )
 
 add_executable(
   # executable name
   dynec
   # source files
+  src/dynec.cpp
   ${dynec_srcs}
   ${dynec_hdrs}
   # build files
@@ -90,4 +96,34 @@ if(MSVC)
   target_compile_options(dynec PRIVATE /W4 /WX)
 else()
   target_compile_options(dynec PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
+
+add_executable(
+  # executable name
+  dynetest
+  # source files
+  test/test.cpp
+  ${dynec_srcs}
+  ${dynec_hdrs}
+  # build files
+  ${dynec_cmake}
+)
+
+target_link_libraries(dynetest
+  PRIVATE
+    GTest::GTest
+    GTest::Main
+)
+
+target_include_directories(
+  dynetest
+  PUBLIC
+  include
+)
+
+if(MSVC)
+  target_compile_options(dynetest PRIVATE /W4 /WX)
+else()
+  target_compile_options(dynetest PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()

@@ -31,16 +31,21 @@
 
 using namespace dyn::io;
 
+
 /** \class pkg::PartEntry
  The directory entry for each part in the package file.
  */
+
 
 /**
  Hold all the Part attributes, but not the Part Data.
  \param[in] ix index within the Package Part list
  */
 PartEntry::PartEntry(int ix)
-  : index_(ix) { }
+  : index_(ix) 
+{
+}
+
 
 /**
  Size of the Part Data block.
@@ -51,6 +56,7 @@ int PartEntry::size()
   return size_;
 }
 
+
 /**
  Index within the Package Part list.
  \return 0-based index
@@ -60,36 +66,61 @@ int PartEntry::index()
   return index_;
 }
 
+
 /**
  Read the Part attributes of the Package
  \param[in] p package data stream
  \return 0 if succeeded
  */
-int PartEntry::load(PackageBytes &p) {
+int PartEntry::load(PackageBytes &p) 
+{
+  // The offset in bytes of the part data from the beginning of the part
+  // data section. Must be a multiple of four.
+  // TODO: not yet symbolic
   offset_ = p.get_uint();
+  // Size of the part in bytes.
   size_ = p.get_uint();
+  // Same as Size.
+  // As opposed to the documentation, size and size2 occasionally differ.
   size2_ = p.get_uint();
-  // As opposed to the documentation, size and size2 occasionally differ
-  //if (size_ != size2_)
-  //  std::cout << "WARNING: Part Entry " << index_ << ": Size and size2 differ.\n";
+#if 0
+  if (size_ != size2_)
+    std::cout << "WARNING: Part Entry " << index_ << ": Size and size2 differ.\n";
+#endif
+  // A code indicating the type of the part.
+  // Found `form`, `book`, `dict`, `auto`, `comm`, `auto`, `soup`, `book`,
+  // `cdhl`, and `prnt`
   type_ = p.get_cstring(4, false);
-  // 'form' 'book' 'dict' 'auto' 'comm'
-  // Foud: "auto", "", "soup", "book", "cdhl", "prnt"
-//  if (type_=="book" || type_=="dict" || type_=="comm")
-//    std::cout << "WARNING: Part Entry " << index_ << ": unsupported type \"" << type_ << "\"\n";
-//  if (type_!="form" && type_!="book" && type_!="dict" && type_!="comm")
-//    std::cout << "WARNING: Part Entry " << index_ << ": unknown type \"" << type_ << "\"\n";
+#if 0
+  if (type_=="book" || type_=="dict" || type_=="comm")
+    std::cout << "WARNING: Part Entry " << index_ << ": unsupported type \"" << type_ << "\"\n";
+  if (type_!="form" && type_!="book" && type_!="dict" && type_!="comm")
+    std::cout << "WARNING: Part Entry " << index_ << ": unknown type \"" << type_ << "\"\n";
+#endif
+  // Should be 0.
   reserved_ = p.get_uint();
+  // Part flags:
+  // kProtocolPart    = 0x00000000
+  // kNOSPart         = 0x00000001
+  // kRawPart         = 0x00000002
+  // kAutoLoadFlag    = 0x00000010
+  // kAutoRemoveFlag  = 0x00000020
+  // kNotifyFlag      = 0x00000080
+  // kAutoCopyFlag    = 0x00000100
   flags_ = p.get_uint();
   if (flags_ & 0xfffffe0c)
     std::cout << "WARNING: Part Entry " << index_ << ": unknown flag: "
     << std::setw(8) << std::setfill('0') << std::hex
     << (flags_ & 0xfffffe0c) << std::dec << std::endl;
+  // A block of data that is passed to the part type handler when the part
+  // is activated. For examle "form".
   info_offset_ = p.get_ushort();
   info_length_ = p.get_ushort();
+  // Both entries are 0 in all tested packages.
   compressor_offset_ = p.get_ushort();
   compressor_length_ = p.get_ushort();
 
+  // Depending on the flags, we create the appropriate PartData class.
   switch (flags_ & 3) {
     case 0: // kProtocolPart (found in Apple packages)
       std::cout << "WARNING: Protocol Parts not yet understood." << std::endl;
@@ -111,6 +142,7 @@ int PartEntry::load(PackageBytes &p) {
   return 0;
 }
 
+
 /**
  Read the optional Info field.
  If the Package was created with NTK, this defaults to
@@ -124,6 +156,7 @@ int PartEntry::loadInfo(PackageBytes &p) {
   return 0;
 }
 
+
 /**
  Read the part data using an interpreter for the format as set in the flags.
  \param[in] p package data stream
@@ -132,6 +165,7 @@ int PartEntry::loadInfo(PackageBytes &p) {
 int PartEntry::loadPartData(PackageBytes &p) {
   return part_data_->load(p);
 }
+
 
 /**
  Write the Package Part attributes in ARM32 assembler format.
@@ -176,6 +210,7 @@ int PartEntry::writeAsm(std::ofstream &f) {
   return 32;
 }
 
+
 /**
  Write the optional Info filed in ARM32 assembler format.
  \param[in] f output stream
@@ -190,6 +225,7 @@ int PartEntry::writeAsmInfo(std::ofstream &f) {
   return info_length_;
 }
 
+
 /**
  Write the Part Data.
  \param[in] f output stream
@@ -198,6 +234,7 @@ int PartEntry::writeAsmInfo(std::ofstream &f) {
 int PartEntry::writeAsmPartData(std::ofstream &f) {
   return part_data_->writeAsm(f);
 }
+
 
 /**
  Compare this part entry with the other part entry.
@@ -228,6 +265,7 @@ int PartEntry::compare(PartEntry &other)
 
   return part_data_->compare(*other.part_data_);
 }
+
 
 /**
  Convert this part of the package into a Dyne object tree.

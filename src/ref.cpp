@@ -35,19 +35,19 @@ using namespace dyn;
 // TODO: static_assert(sizeof(Ref)==sizeof(uintptr_t), "'Ref' has unexpected size.");
 
 bool Ref::IsBinary() const {
-  return IsPtr() && o->IsBinary();
+  return IsPtr() && o_->IsBinary();
 }
 
 bool Ref::IsArray() const {
-  return IsPtr() && o->IsArray();
+  return IsPtr() && o_->IsArray();
 }
 
 bool Ref::IsFrame() const {
-  return IsPtr() && o->IsFrame();
+  return IsPtr() && o_->IsFrame();
 }
 
 bool Ref::IsSymbol() const {
-  return IsPtr() && o->IsSymbol();
+  return IsPtr() && o_->IsSymbol();
 }
 
 bool Ref::IsReadOnly() const {
@@ -60,46 +60,68 @@ bool Ref::IsReadOnly() const {
 
 int Ref::Print(dyn::io::PrintState &ps) const
 {
-  switch (v.tag_) {
-    case Tag::pointer:
-      o->Print(ps);
+  switch (tag_()) {
+    case kTagPointer:
+      o_->Print(ps);
       break;
-    case Tag::integer:
-      fprintf(ps.out_, "%ld", (Integer)v.value_);
+    case kTagInteger:
+      fprintf(ps.out_, "%ld", tag_value_());
       break;
-    case Tag::immed:
-      switch (i.type_) {
-        case Type::unichar:
-          std::fprintf(ps.out_, "$%s", unicode_to_utf8((UniChar)i.value_).c_str());
+    case kTagImmed:
+      switch (immed_()) {
+        case kImmedChar:
+          std::fprintf(ps.out_, "$%s", unicode_to_utf8((UniChar)immed_value_()).c_str());
           break;
-        case Type::special:
-          if (i.value_==0) {
+        case kImmedSpecial:
+          if (*this == RefNIL) {
             std::fprintf(ps.out_, "NIL");
+          } else if (*this == Ref::kPlainFuncClass) {
+            if (!ps.symbol_expected()) std::fputc('\'', ps.out_);
+            std::fprintf(ps.out_, "__PlainFuncClass");
+          } else if (*this == Ref::kPlainCFunctionClass) {
+            if (!ps.symbol_expected()) std::fputc('\'', ps.out_);
+            std::fprintf(ps.out_, "__PlainCFunctionClass");
+          } else if (*this == Ref::kBinCFunctionClass) {
+            if (!ps.symbol_expected()) std::fputc('\'', ps.out_);
+            std::fprintf(ps.out_, "__BinCFunctionClass");
           } else {
-            std::fprintf(ps.out_, "[undefined special: %ld]", i.value_);
+            std::fprintf(ps.out_, "[ERROR: undefined special: %ld]", immed_value_());
           }
           break;
-        case Type::boolean:
-          if (i.value_==1) {
+        case kImmedBoolean:
+          if (immed_value_() == 1) {
             std::fprintf(ps.out_, "TRUE");
           } else {
-            std::fprintf(ps.out_, "[undefined boolean: %ld]", i.value_);
+            std::fprintf(ps.out_, "[ERROR: undefined boolean: %ld]", immed_value_());
           }
           break;
-        case Type::reserved:
-          if (sizeof(t)==4)
-            std::fprintf(ps.out_, "[reserved: 0x%08lx]", t);
+        case kImmedReserved:
+          if (sizeof(r_)==4)
+            std::fprintf(ps.out_, "[ERROR: reserved: 0x%08lx]", r_);
           else
-            std::fprintf(ps.out_, "[reserved: 0x%086lx]", t);
+            std::fprintf(ps.out_, "[ERROR: reserved: 0x%016lx]", r_);
           break;
       }
       break;
-    case Tag::magic:
-      std::fprintf(ps.out_, "@%ld", v.value_);
-      break;
+    case kTagMagicPtr: {
+      int table = static_cast<int>(r_ >> 14);
+      int index = static_cast<int>((r_ >> 4) & 0x00000fff);
+      if (table) {
+        std::fprintf(ps.out_, "@%d.%d", table, index);
+      } else {
+        std::fprintf(ps.out_, "@%d", index);
+      }
+      break; }
   }
 
   return 0;
 }
 
-
+const Ref Ref::kWeakArrayClass      { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(1<<kImmedShift)) };
+const Ref Ref::kFaultBlockClass     { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(2<<kImmedShift)) };
+const Ref Ref::kPlainFuncClass      { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(0x03<<kImmedShift)) };
+const Ref Ref::kPlainCFunctionClass { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(0x13<<kImmedShift)) };
+const Ref Ref::kBinCFunctionClass   { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(0x23<<kImmedShift)) };
+const Ref Ref::kBadPackageRef       { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(4<<kImmedShift)) };
+const Ref Ref::kUnstreamableObject  { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(5<kImmedShift)) };
+const Ref Ref::kSymbolClass         { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(0x5555<<kImmedShift)) };
