@@ -26,6 +26,7 @@
 #include <dyn/objects.h>
 #include <dyn/io/package.h>
 #include <dyn/tools/tools.h>
+#include <dyn/lang/decompile.h>
 
 #include <gtest/gtest.h>
 
@@ -99,4 +100,8 @@ TEST(DyneRefs, BasicTypes) {
 }
 
 TEST(DyneRefs, GetSet) {
+}
+
+TEST(Decompiler, Test) {
+  dyn::lang::decompile(dyn::RefNIL);
 }

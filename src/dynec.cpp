@@ -130,7 +130,7 @@ int main(int argc, const char * argv[])
     return 0;
   }
 #endif
-#if 1
+#if 0
   dyn::Ref nos_pkg = my_pkg.toNOS();
 //  (void)nos_pkg;
   dyn::Print(nos_pkg);

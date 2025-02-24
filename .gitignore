@@ -36,3 +36,5 @@ build
 .vscode
 **/.DS_Store
 mines.*
+/src/lang/bytecode.cpp
+/src/lang/bytecode.h

@@ -307,6 +307,9 @@ int ObjectBinary::writeAsm(std::ofstream &f, PartDataNOS &p)
             case 5: f << "iter_next"; break;
             case 6: f << "iter_done"; break;
             case 7: f << "pop_handlers"; break;
+            default:
+              std::cout << "WARNING: unknown byte code a:" << a << ", b:" << b << "." << std::endl;
+              break;
           }
           break;
         case 3: f << "push " << b; break;
@@ -357,9 +360,15 @@ int ObjectBinary::writeAsm(std::ofstream &f, PartDataNOS &p)
             case 22: f << "stringer"; break;
             case 23: f << "has_path"; break;
             case 24: f << "class_of"; break;
+            default:
+              std::cout << "WARNING: unknown byte code a:" << a << ", b:" << b << "." << std::endl;
+              break;
           }
           break;
         case 25: f << "new_handlers " << b; break;
+        default:
+          std::cout << "WARNING: unknown byte code a:" << a << ", b:" << b << "." << std::endl;
+          break;
       }
       f << std::endl;
     }

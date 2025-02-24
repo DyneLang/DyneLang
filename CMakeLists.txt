@@ -45,6 +45,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(GTest REQUIRED)
 # brew install googletest
 
+find_package(BISON REQUIRED)
+# brew install bison
+# bison_target(<Name> <YaccInput> <CodeOutput>
+#              [OPTIONS <options>...]
+#              [COMPILE_FLAGS <string>]
+#              [DEFINES_FILE <file>]
+#              [VERBOSE [<file>]]
+#              [REPORT_FILE <file>])
+bison_target(
+  Decompiler
+  src/lang/bytecode.y
+  ${CMAKE_SOURCE_DIR}/src/lang/bytecode.cpp
+  DEFINES_FILE
+  ${CMAKE_SOURCE_DIR}/src/lang/bytecode.h
+  COMPILE_FLAGS --debug
+)
+
 set(dynec_srcs)
 set(dynec_hdrs)
 set(dynec_cmake CMakeLists.txt)
@@ -63,6 +80,8 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}
   ${dynec_cmake}
   src/dynec.cpp
   test/test.cpp
+  src/lang/bytecode.y
+  ${BISON_Decompiler_OUTPUTS}
 )
 
 add_executable(
@@ -72,12 +91,17 @@ add_executable(
   src/dynec.cpp
   ${dynec_srcs}
   ${dynec_hdrs}
+#  src/lang/bytecode.y
+#  ${BISON_Decompiler_OUTPUTS}
   # build files
   ${dynec_cmake}
   # other files for quick access
   README.md
   ## Package.md
 )
+
+# bison_target(dynec parser.y parser.cpp OPTIONS $<$<CONFIG:Debug>:-t>)
+
 
 set_source_files_properties(README.md PROPERTIES HEADER_FILE_ONLY TRUE)
 # set_source_files_properties(Package.md PROPERTIES HEADER_FILE_ONLY TRUE)
@@ -106,6 +130,8 @@ add_executable(
   test/test.cpp
   ${dynec_srcs}
   ${dynec_hdrs}
+  src/lang/bytecode.y
+  ${BISON_Decompiler_OUTPUTS}
   # build files
   ${dynec_cmake}
 )
@@ -127,3 +153,7 @@ if(MSVC)
 else()
   target_compile_options(dynetest PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
+
+# ------
+
+

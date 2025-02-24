@@ -22,7 +22,13 @@
 # SOFTWARE.
 # 
 
-# nothing yet
+list(APPEND dynec_srcs
+    src/lang/decompile.cpp
+)
+
+list(APPEND dynec_hdrs
+    include/dyn/lang/decompile.h
+)
 
 list(APPEND dynec_cmake
     src/lang/CMakeLists.txt

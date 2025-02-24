@@ -129,6 +129,9 @@ int dyn::Object::Print(dyn::io::PrintState &ps) const
 {
   switch (t.tag_) {
     case Tag::binary:
+      // TODO: MakeBinaryFromHex("0023bf6590")...
+      // TODO: MakeBinaryFromARM(" mov r12, sp")...
+      // TODO: MakeBinaryFromBC( [bc:GetVar(3), bc:PushConst(0), ...] )
       // TODO: binary.class_ is not necessarily an object!
       if (binary.class_.GetObject()->SymbolCompare(&gSymObjString)==0) {
         fprintf(ps.out_, "\"%s\"", binary.data_); // TODO: must escape characters, is \0 always at the end?

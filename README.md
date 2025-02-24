@@ -99,6 +99,20 @@ We could add an ARM32 disassembler if we want to dive deeper int that.
 - compile source code into byte code
 - run byte code
 
+### Side Note
+
+"The 2.0 interpreter has numerous optimizations over the 1.0 
+version that required a slightly different function format. A 2.0 argFrame 
+contains only what's necessary to make closures work. The _parent, 
+_nextArgFrame, and _implementor slots can contain NIL if the function doesn't
+use them. Most important, a 2.0 argFrame will have a slot for a local variable 
+only if the variable is referenced in another function and so must be present 
+in a closure. Purely local variables are kept on the stack in 2.0.
+
+NumArgs in a 2.0 function has two bitfields. The lower 14 bits gives the
+number of arguments, and the upper 16 bits gives the number of locals to
+allocate on the stack." - Walter Smith
+
 ### A little extra fun:
 
 At this point, we can add a reader and writer for ROM data pretty easily. We 
