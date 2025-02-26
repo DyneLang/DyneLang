@@ -217,6 +217,7 @@ public:
   Index Length() const;
   void SetLength(Index new_length);
   Ref GetSlot(Index i) const;
+  void SetSlot(Index ix, RefArg value);
 };
 
 class Array: public SlottedObject
@@ -291,6 +292,7 @@ Index FindOffset(Ref map, Ref tag);
 Index AddArraySlot(RefArg array_ref, RefArg value);
 bool IsReadOnly(RefArg ref);
 Ref GetArraySlot(RefArg array_obj, Index slot);
+void SetArraySlot(RefArg array, Index slot, RefArg value);
 Ref MakeString(const char *str);
 inline Ref MakeString(const std::string &str) { return MakeString(str.c_str()); }
 Ref Sym(const char *name);

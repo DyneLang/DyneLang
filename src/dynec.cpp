@@ -25,7 +25,9 @@
 #include <dyn/ref.h>
 #include <dyn/objects.h>
 #include <dyn/io/package.h>
+#include <dyn/io/stream.h>
 #include <dyn/tools/tools.h>
+#include <dyn/lang/decompile.h>
 
 #include <iostream>
 #include <fstream>
@@ -105,7 +107,7 @@ int objToBin(std::string object_file_name, std::string new_package_name)
  \note Optionally, it creates a Dyna Object Tree from the package data and
       prints it to the terminal. The output has not been verified yet.
  */
-int main(int argc, const char * argv[])
+int main_01(int argc, const char * argv[])
 {
   if (argc==2) {
     input_pkg_name = argv[1];
@@ -164,13 +166,18 @@ int main(int argc, const char * argv[])
       from known packages, recompile them, and ideally generate the exact same
       bytecode. Functional equality is sufficient though.
  */
-int main_002(int argc, const char * argv[])
+int main(int argc, const char * argv[])
 {
+  (void)argc;
+  (void)argv;
   // Enter some source code here or read a file
   // Call the Newton Framework to generate a Newton Stream File
   // Read the stream file
+  dyn::Ref ref = dyn::io::StreamReader::read("/Users/matt/dev/test.nsof");
   // Output the binary representation
+  dyn::Print(ref);
   // Decompile the function
+  dyn::lang::decompile(ref);
   // Output the source code and compare the result to the input
   return 0;
 }

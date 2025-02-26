@@ -128,12 +128,13 @@ int dyn::SymbolCompare(Ref sym1, Ref sym2)
 int dyn::Object::Print(dyn::io::PrintState &ps) const
 {
   switch (t.tag_) {
-    case Tag::binary:
+    case Tag::binary: {
       // TODO: MakeBinaryFromHex("0023bf6590")...
       // TODO: MakeBinaryFromARM(" mov r12, sp")...
       // TODO: MakeBinaryFromBC( [bc:GetVar(3), bc:PushConst(0), ...] )
       // TODO: binary.class_ is not necessarily an object!
-      if (binary.class_.GetObject()->SymbolCompare(&gSymObjString)==0) {
+      auto o = binary.class_.GetObject();
+      if (o && o->SymbolCompare(&gSymObjString)==0) {
         fprintf(ps.out_, "\"%s\"", binary.data_); // TODO: must escape characters, is \0 always at the end?
       } else {
         //'samples, 'instructions, 'code, 'bits, 'mask, 'cbits etc.
@@ -159,7 +160,7 @@ int dyn::Object::Print(dyn::io::PrintState &ps) const
           fprintf(ps.out_, ": <%ld bytes>)", size());
         }
       }
-      break;
+      break; }
     case Tag::large_binary:
       fprintf(ps.out_, "large_binary('");
       ps.expect_symbol(true);
@@ -255,18 +256,23 @@ Ref dyn::AllocateArray(Index length)
   return AllocateArray(kRefArray, length);
 }
 
+void dyn::SlottedObject::SetSlot(Index ix, RefArg value)
+{
+  assert((ix >= 0) && (ix < Length()));
+  array.slot_[ix] = value;
+}
+
 Index dyn::Array::AddSlot(RefArg value)
 {
   Index len = Length();
   SetLength(len + 1);
-  assert((len >= 0) && (len < (Index)(size_/sizeof(Ref))));
-  array.slot_[len] = value;
+  SetSlot(len, value);
   return len;
 }
 
 void dyn::Frame::SetSlot(RefArg tag, RefArg value)
 {
-  // TODO: frame.map_->FIndOffset(tag);
+  // TODO: frame.map_->FindOffset(tag);
   Index i = FindOffset(frame.map_, tag);
   if (i == -1) {
     i = frame.map_->AddSlot(tag);
@@ -280,12 +286,12 @@ void dyn::Frame::SetSlot(RefArg tag, RefArg value)
 
 Ref dyn::Frame::GetSlot(RefArg tag) const
 {
-  // TODO: frame.map_->FIndOffset(tag);
+  // TODO: frame.map_->FindOffset(tag);
   Index i = FindOffset(frame.map_, tag);
   if (i == -1)
     return RefNIL;
-  assert((i-1 >= 0) && (i-1 < (Index)(size_/sizeof(Ref))));
-  return frame.slot_[i-1];
+  assert((i >= 0) && (i < (Index)(size_/sizeof(Ref))));
+  return frame.slot_[i];
 }
 
 Index dyn::FindOffset(Ref map_ref, Ref tag)
@@ -336,9 +342,22 @@ Index dyn::AddArraySlot(RefArg array_ref, RefArg value)
 
 Ref dyn::GetArraySlot(RefArg array_obj, Index slot)
 {
-  (void)array_obj;
-  (void)slot;
-  return RefNIL;
+  // TODO: throw if anything is off
+  if (array_obj.IsArray()) {
+    Array *a = static_cast<Array*>(array_obj.GetObject());
+    return a->GetSlot(slot);
+  } else {
+    return RefNIL;
+  }
+}
+
+void dyn::SetArraySlot(RefArg array, Index slot, RefArg value)
+{
+  // TODO: throw if anything is off
+  if (array.IsArray()) {
+    Array *a = static_cast<Array*>(array.GetObject());
+    a->SetSlot(slot, value);
+  }
 }
 
 int dyn::Array::Print(dyn::io::PrintState &ps) const

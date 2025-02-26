@@ -22,43 +22,37 @@
  * SOFTWARE.
  */
 
-#ifndef DYN_IO_PACKAGE_PACKAGE_BYTES_H
-#define DYN_IO_PACKAGE_PACKAGE_BYTES_H
+#ifndef DYN_IO_STREAM_H
+#define DYN_IO_STREAM_H
 
-#include <ios>
-#include <cstdlib>
-#include <vector>
+#include <dyn/io/package/package_bytes.h>
 
-namespace dyn::io {
+#include <string>
 
-class PackageBytes : public std::vector<uint8_t>
+namespace dyn {
+
+class Ref;
+
+namespace io {
+
+class StreamReader
 {
-  PackageBytes::iterator it_;
-
+  std::shared_ptr<PackageBytes> bytes_ { nullptr };
+  dyn::Ref read_next_();
+  std::vector<dyn::Ref> precedent_;
 public:
-  PackageBytes() = default;
-  ~PackageBytes() = default;
-  PackageBytes(PackageBytes const& rhs) = delete;
-  PackageBytes(PackageBytes const&& rhs) = delete;
-  PackageBytes& operator=(PackageBytes const& rhs) = delete;
-  PackageBytes& operator=(PackageBytes const&& rhs) = delete;
-
-  void rewind();
-  void seek_set(int ix);
-  int tell();
-  bool eof();
-  uint8_t get_ubyte();
-  uint16_t get_ushort();
-  uint32_t get_uint();
-  uint32_t get_ref();
-  uint32_t get_xlong();
-  std::string get_cstring(int n, bool trailing_nul=true);
-  std::string get_ustring(int n, bool trailing_nul=true);
-  std::vector<uint8_t> get_data(int n);
-  void align(int n);
+  StreamReader();
+  ~StreamReader();
+  int open(const std::string &filename);
+  dyn::Ref read();
+  void close();
+  static dyn::Ref read(const std::string &filename);
 };
 
-}; // namespace dyn::io
+} // namespace io
 
-#endif // DYN_IO_PACKAGE_PACKAGE_BYTES_H
+} // namespace dyn
+
+#endif // DYN_IO_STREAM_H
+
 

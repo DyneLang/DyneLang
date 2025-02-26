@@ -27,13 +27,14 @@ include(src/io/package/CMakeLists.txt)
 
 list(APPEND dynec_srcs
     src/io/package.cpp
-    src/io/package_validator.cpp
     src/io/print.cpp
+    src/io/stream.cpp
 )
 
 list(APPEND dynec_hdrs
     include/dyn/io/package.h
     include/dyn/io/print.h
+    include/dyn/io/stream.h
 )
 
 list(APPEND dynec_cmake

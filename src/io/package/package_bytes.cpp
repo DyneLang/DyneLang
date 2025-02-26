@@ -144,6 +144,19 @@ uint32_t PackageBytes::get_ref() {
 }
 
 /**
+ Get one 32 bit word using the NSOF compression scheme.
+ \return a integer in the native byte order.
+ */
+uint32_t PackageBytes::get_xlong() {
+  uint8_t t = get_ubyte();
+  if (t==0xff) {
+    return get_uint();
+  } else {
+    return (uint32_t)t;
+  }
+}
+
+/**
  Create an ASCII string and advance the iterator.
  \note This does not check if the string is actually ASCII (it may contain
  Mac specific characters with bit 7 set) and does not check if the trailing
