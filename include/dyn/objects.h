@@ -247,6 +247,8 @@ public:
   Frame();
   int Print(dyn::io::PrintState &ps) const;
   void SetSlot(RefArg tag, RefArg value);
+  Ref GetSlot(Index i) const { return SlottedObject::GetSlot(i); }
+  Ref GetSlot(RefArg tag) const;
   Index AddSlot(RefArg tag);
 };
 
@@ -265,6 +267,9 @@ int SymbolCompare(Ref sym1, Ref sym2);
 constexpr Symbol gSymObjString { "string" };
 constexpr Ref gSymString { gSymObjString };
 
+constexpr Symbol gSymObjInstructions { "instructions" };
+constexpr Ref gSymInstructions { gSymObjInstructions };
+
 constexpr Symbol gSymObjReal { "real" };
 constexpr Ref gSymReal { gSymObjReal };
 
@@ -279,6 +284,7 @@ constexpr Object::Object(Real value)
 
 Ref AllocateFrame();
 void SetFrameSlot(RefArg obj, RefArg slot, RefArg value);
+Ref GetFrameSlot(RefArg obj, RefArg slot);
 Ref AllocateArray(RefArg obj_class, Index length);
 Ref AllocateArray(Index length);
 Index FindOffset(Ref map, Ref tag);

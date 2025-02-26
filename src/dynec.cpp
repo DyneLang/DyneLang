@@ -35,15 +35,18 @@
 #include <codecvt>
 
 
+// TODO: move the code below into some functional validator file and offer
+// to add (and default to) stress tests at compile time.
+
 const std::string gnu_as { "/opt/homebrew/bin/arm-none-eabi-as" };
 const std::string gnu_objcopy { "/opt/homebrew/bin/arm-none-eabi-objcopy" };
 
 //std::string input_pkg_name { "/Users/matt/Azureus/unna/games/Mines/Mines.pkg" };
 //std::string input_pkg_name { "/Users/matt/Azureus/unna/games/SuperNewtris2.0/SNewtris.pkg" };
 //std::string input_pkg_name { "/Users/matt/Azureus/unna/games/DeepGreen1.0b3/deepgreen10b3.pkg" }; // contains relocation data
-//std::string input_pkg_name { "/Users/matt/Azureus/unna/games/GoldTeeAtBighorn/Goldtee.pkg" }; // Contains Floatin Point values
-std::string input_pkg_name { "/Users/matt/Azureus/unna/games/NewTiles1.2/newtiles-1_2.pkg" }; // 'package1'
-//std::string input_pkg_name { "/Users/matt/Azureus/unna/games/ScrabbleScorer/ScrabbleScorer.pkg" }; // unreferenced objects
+std::string input_pkg_name { "/Users/matt/Azureus/unna/games/GoldTeeAtBighorn/Goldtee.pkg" }; // pkg0: Contains Floatin Point values
+//std::string input_pkg_name { "/Users/matt/Azureus/unna/games/NewTiles1.2/newtiles-1_2.pkg" }; // pkg1: 'package1'
+//std::string input_pkg_name { "/Users/matt/Azureus/unna/games/ScrabbleScorer/ScrabbleScorer.pkg" }; // pkg1: unreferenced objects
 
 
 /**
@@ -89,8 +92,18 @@ int objToBin(std::string object_file_name, std::string new_package_name)
 }
 
 /**
- Run our application with hardcoded file names for now.
+ Run our application with default or user supplied file names.
  \param[in] argc, argv
+ \note This version of main stress tests our package reading and writing
+      capabilities. It reads a pkg file, writes it back as ARM32 assembler,
+      and converts that back into a package. It then compares both packages
+      and alerts us of differences. It also warns us about abnormalities when
+      reading the original package.
+ \note Optionally, it reads the generated package as well, and compares the
+      data structures in memory. This test is less pedantic in that it does not
+      verify filler bytes, but alos does not catch all errors that.
+ \note Optionally, it creates a Dyna Object Tree from the package data and
+      prints it to the terminal. The output has not been verified yet.
  */
 int main(int argc, const char * argv[])
 {
@@ -130,7 +143,7 @@ int main(int argc, const char * argv[])
     return 0;
   }
 #endif
-#if 0
+#if 1
   dyn::Ref nos_pkg = my_pkg.toNOS();
 //  (void)nos_pkg;
   dyn::Print(nos_pkg);
@@ -139,3 +152,27 @@ int main(int argc, const char * argv[])
   return 0;
 }
 
+/**
+ Read a Dyne Stream file that conatains a function and decompile it.
+ \param[in] argc, argv
+ \note This version of main stress tests the decompiler. We start with the
+      source code of a function, let an external tool compile the function
+      into a Ref with bytecode, read the Ref back, and decompile it back
+      into source code. This is successful when the original source code and
+      the generated code are functionally identical.
+ \note In later incarnations, we want to decompiel all available functions
+      from known packages, recompile them, and ideally generate the exact same
+      bytecode. Functional equality is sufficient though.
+ */
+int main_002(int argc, const char * argv[])
+{
+  // Enter some source code here or read a file
+  // Call the Newton Framework to generate a Newton Stream File
+  // Read the stream file
+  // Output the binary representation
+  // Decompile the function
+  // Output the source code and compare the result to the input
+  return 0;
+}
+
+// Test me: dyn::lang::decompile(dyn::RefNIL);

@@ -27,6 +27,7 @@ include(src/io/package/CMakeLists.txt)
 
 list(APPEND dynec_srcs
     src/io/package.cpp
+    src/io/package_validator.cpp
     src/io/print.cpp
 )
 

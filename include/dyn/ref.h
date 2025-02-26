@@ -71,7 +71,7 @@ public:
   constexpr Ref()                   : r_ { 0x000FFFF2 } { };
   constexpr Ref(Integer i)          : r_{ (((uintptr_t)i)<<kTagShift)|kTagInteger } {}
   constexpr Ref(int i)              : r_{ (((uintptr_t)i)<<kTagShift)|kTagInteger } {}
-  constexpr Ref(UniChar u)          : r_{ (((uintptr_t)u)<<kImmedShift)|kTagMask|kImmedChar } {}
+  constexpr Ref(UniChar u)          : r_{ (((uintptr_t)u)<<kImmedShift)|kTagImmed|kImmedChar } {}
   constexpr Ref(int table, int ix)  : r_{ (((uintptr_t)table)<<14) | (((uintptr_t)ix)<<kTagShift)|kTagMagicPtr } {}
   constexpr Ref(Boolean i)          : r_{ (uintptr_t)(i ? 0x1a : 0x02) } {}
   constexpr Ref(const Object &obj)  : o_{ const_cast<Object*>(&obj) } { }

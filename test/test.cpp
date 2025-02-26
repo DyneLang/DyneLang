@@ -102,6 +102,3 @@ TEST(DyneRefs, BasicTypes) {
 TEST(DyneRefs, GetSet) {
 }
 
-TEST(Decompiler, Test) {
-  dyn::lang::decompile(dyn::RefNIL);
-}

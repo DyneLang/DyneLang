@@ -141,7 +141,23 @@ int dyn::Object::Print(dyn::io::PrintState &ps) const
         ps.expect_symbol(true);
         binary.class_.Print(ps);
         ps.expect_symbol(false);
-        fprintf(ps.out_, ": <%ld bytes>)", size());
+        if (binary.class_.GetObject()->SymbolCompare(&gSymObjInstructions)==0) {
+          fprintf(ps.out_, ": <%ld bytes:", size());
+          ps.incr_depth();
+          for (int i=0; i<size(); i++) {
+            if ((i&7)==0) {
+              fprintf(ps.out_, "\n");
+              ps.tab();
+            }
+            fprintf(ps.out_, "0x%02x, ", (uint8_t)binary.data_[i]);
+          }
+          fprintf(ps.out_, "\n");
+          ps.decr_depth();
+          ps.tab();
+          fprintf(ps.out_, ">)");
+        } else {
+          fprintf(ps.out_, ": <%ld bytes>)", size());
+        }
       }
       break;
     case Tag::large_binary:
@@ -205,6 +221,14 @@ void dyn::SetFrameSlot(RefArg obj, RefArg tag, RefArg value)
   frame->SetSlot(tag, value);
 }
 
+Ref dyn::GetFrameSlot(RefArg obj, RefArg slot)
+{
+  if (!obj.IsFrame())
+    throw BadTypeWithFrameData(kDyneErrNotAFrame);
+  Frame *frame = static_cast<Frame*>(obj.GetObject());
+  return frame->GetSlot(slot);
+}
+
 dyn::Array::Array(RefArg obj_class, Index length)
 : SlottedObject( Array_{ obj_class, new Ref[length], 0 }, (uint32_t)length)
 { }
@@ -252,6 +276,16 @@ void dyn::Frame::SetSlot(RefArg tag, RefArg value)
   }
   assert((i-1 >= 0) && (i-1 < (Index)(size_/sizeof(Ref))));
   frame.slot_[i-1] = value;
+}
+
+Ref dyn::Frame::GetSlot(RefArg tag) const
+{
+  // TODO: frame.map_->FIndOffset(tag);
+  Index i = FindOffset(frame.map_, tag);
+  if (i == -1)
+    return RefNIL;
+  assert((i-1 >= 0) && (i-1 < (Index)(size_/sizeof(Ref))));
+  return frame.slot_[i-1];
 }
 
 Index dyn::FindOffset(Ref map_ref, Ref tag)
