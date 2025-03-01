@@ -63,12 +63,7 @@ Package and output it as DyneScript text.
 
 ## Next Steps
 
-Assembler output is almost entirely symbolic, notable with the exception of the 
-byte code output. Also, relocation data can not be symbolic because it is
-encoded in a block scheme. It is rarely used (but if it *is* used, usually to
-implement copy protection schemes).
-
-We could add an ARM32 disassembler if we want to dive deeper int that. 
+Decompile functions.
 
 ### Next
 
@@ -89,13 +84,14 @@ We could add an ARM32 disassembler if we want to dive deeper int that.
 
 ### Next I want to be able to decompile and compile:
 
-- generate NewtonScript text from Object Tree, data only (no byte code, print 
+- ✓ generate NewtonScript text from Object Tree, data only (no byte code, print 
   binary objects in hex)
+- convert byte code back into source code
+  - ✓ basic layout
+  - implement `ToString(Ref)`
+  - incremental implementation of 58 byte code commands
 - generate Object Tree from UTF-8 NewtonScript (simple compiler)
 - test by writing a Package from NewtonScript
-- convert byte code back into source code
-  - try `flex` and more importantly `bison` to understand the byte code and
-    generate source code
 - compile source code into byte code
 - run byte code
 
@@ -236,6 +232,15 @@ reader and writer recognizes those Parts and transfers them verbatim.
 ### Raw Parts:
 - "/Users/matt/Azureus/unna/applications/Fortunes/Science.pkg"
 - etc.
+
+### Assembler File:
+ 
+Assembler output is almost entirely symbolic, notable with the exception of the 
+byte code output. Also, relocation data can not be symbolic because it is
+encoded in a block scheme. It is rarely used (but if it *is* used, usually to
+implement copy protection schemes).
+ 
+We could add an ARM32 disassembler if we want to dive deeper into that. 
 
 
 ## History
