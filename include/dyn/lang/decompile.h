@@ -26,11 +26,50 @@
 #define DYN_LANG_DECOMPILE_H
 
 #include <dyn/ref.h>
+#include <vector>
 
 namespace dyn {
 
 namespace lang {
 
+/**
+ Dyne bytecode program counter.
+ This is the index of the bytecode within the instructions array.
+ */
+using PC = size_t;
+
+/**
+ Enum of all available Dyne bytecodes.
+ */
+enum class BC {
+  EndOfFile,       Pop,             Dup,             Return,
+  PushSelf,        SetLexScope,     IterNext,        IterDone,
+  PopHandlers,     Push,            PushConst,       Call,
+  Invoke,          Send,            SendIfDefined,   Resend,
+  ResendIfDefined, Branch,          BranchIfTrue,    BranchIfFalse,
+  FindVar,         GetVar,          MakeFrame,       MakeArray,
+  FillArray,       GetPath,         GetPathCheck,    SetPath,
+  SetPathVal,      SetVar,          FindAndSetVar,   IncrVar,
+  BranchLoop,      Add,             Subtract,        ARef,
+  SetARef,         Equals,          Not,             NotEquals,
+  Multiply,        Divide,          Div,             LessThan,
+  GreaterThan,     GreaterOrEqual,  LessOrEqual,     BitAnd,
+  BitOr,           BitNot,          NewIter,         Length,
+  Clone,           SetClass,        AddArraySlot,    Stringer,
+  HasPath,         ClassOf,         NewHandler,      Unknown
+};
+
+/**
+ Verbose version of a Dyne bytecode instruction including labels.
+ */
+typedef struct {
+  BC bytecode;
+  int arg;
+  PC pc;
+  int references;
+} Bytecode;
+
+void print_bytecode(std::vector<Bytecode> &func);
 Ref decompile(RefArg func);
 
 } // lang

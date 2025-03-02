@@ -26,12 +26,13 @@
 #define DYN_LANG_TRANSCODE_H
 
 #include <dyn/ref.h>
+#include <dyn/lang/decompile.h>
 
 namespace dyn {
 
 namespace lang {
 
-Ref transcode_from_ns(RefArg ns_func);
+std::vector<Bytecode> transcode_from_ns(RefArg ns_func);
 
 } // namespce lang
 

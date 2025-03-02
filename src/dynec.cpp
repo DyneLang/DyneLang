@@ -155,7 +155,7 @@ int main_01(int argc, const char * argv[])
 }
 
 /**
- Read a Dyne Stream file that conatains a function and decompile it.
+ Read a Dyne Stream file that contains a function and decompile it.
  \param[in] argc, argv
  \note This version of main stress tests the decompiler. We start with the
       source code of a function, let an external tool compile the function
@@ -172,6 +172,13 @@ int main(int argc, const char * argv[])
   (void)argv;
   // Enter some source code here or read a file
   // Call the Newton Framework to generate a Newton Stream File
+  std::string cmd = "/Users/matt/dev/newtc /Users/matt/dev/DyneLang/src/lang/test.ns";
+  if (std::system(cmd.c_str()) != 0) {
+    std::cout << "ERROR: Failed to compile NewtonScript file." << std::endl
+    << "  " << cmd << std::endl;
+    return -1;
+  }
+
   // Read the stream file
   dyn::Ref ref = dyn::io::StreamReader::read("/Users/matt/dev/test.nsof");
   // Output the binary representation

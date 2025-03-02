@@ -34,4 +34,5 @@ list(APPEND dynec_hdrs
 
 list(APPEND dynec_cmake
     src/lang/CMakeLists.txt
+    src/lang/test.ns
 )
