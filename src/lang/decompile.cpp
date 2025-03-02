@@ -121,7 +121,7 @@ using BCIP = size_t;
 using ACIP = size_t;
 
 enum {
-  kACEOF,             kACPop,             kACDup,             kACReturn,
+  kACEndOfFile,       kACPop,             kACDup,             kACReturn,
   kACPushSelf,        kACSetLexScope,     kACIterNext,        kACIterDone,
   kACPopHandlers,     kACPush,            kACPushConst,       kACCall,
   kACInvoke,          kACSend,            kACSendIfDefined,   kACResend,
@@ -144,7 +144,7 @@ typedef struct {
 
 AltCode ac_empty { 0, 0, 0 };
 // TODO: rename this, it's the current state of the Decompiler
-// TODO: add the gloabl variables to it and make sure the destructor works
+// TODO: add the global variables to it and make sure the destructor works
 class Deco {
 public:
   Index ip { 0 };
@@ -154,7 +154,7 @@ public:
 typedef int (*VcHandler)(Deco&);
 
 enum {
-  kSTEndOfSTack, kSTUnknown, kSTError, kSTExpr, kSTStatement, kSTCondition,
+  kSTEndOfStack, kSTUnknown, kSTError, kSTExpr, kSTStatement, kSTCondition,
   kSTBranchFwd, kSTBranchBack, kSTBranchTrueFwd, kSTBranchTrueBack,
   kSTBranchFalseFwd, kSTBranchFalseBack
 };
@@ -177,7 +177,7 @@ static std::vector<State> stack { };
 void PrintStack() {
   for (auto &state: stack) {
     switch (state.type) {
-      case kSTEndOfSTack:       std::cout << "------------: "; break;
+      case kSTEndOfStack:       std::cout << "------------: "; break;
       case kSTUnknown:          std::cout << "     unknown: "; break;
       case kSTError:            std::cout << "       ERROR: "; break;
       case kSTExpr:             std::cout << "        expr: "; break;
@@ -259,7 +259,7 @@ int DoDivide(Deco &deco) { return DoInfixOperator(deco, "/", 5); }
 int DoReturn(Deco &deco) {
   State s = stack.back();
   // Handle the 'return' command at the end of the function.
-  if (altcode[deco.ip+1].cmd == kACEOF) {
+  if (altcode[deco.ip+1].cmd == kACEndOfFile) {
     // The compiler added a 'return' even though it was not needed. Don't output anything
     if (s.type != kSTExpr) {
       return 1;
@@ -676,7 +676,7 @@ VcHandler handler[] = {
 static void print_altcode(int ip, AltCode &ac) {
   std::cout << std::setw(4) << ip << std::setw(4) << ac.ip << ": ";
   switch (ac.cmd) {
-    case kACEOF:              std::cout << "    EOF" << std::endl; break;
+    case kACEndOfFile:              std::cout << "    EOF" << std::endl; break;
     case kACPop:              std::cout << "    pop" << std::endl; break;
     case kACDup:              std::cout << "    dup" << std::endl; break;
     case kACReturn:           std::cout << "    return" << std::endl; break;
@@ -867,7 +867,7 @@ static int expand(dyn::RefArg func)
         break;
     }
   }
-  altcode.push_back({kACEOF, 0, n_inst});
+  altcode.push_back({kACEndOfFile, 0, n_inst});
   return 0;
 }
 
@@ -899,7 +899,7 @@ Ref dyn::lang::decompile(RefArg func)
     return RefNIL;
   printf("--- expanded byte code\n");
   print_expanded();
-  stack.push_back( { kSTEndOfSTack, 0, "... stack bottom ..." } );
+  stack.push_back( { kSTEndOfStack, 0, "... stack bottom ..." } );
   printf("--- decode\n");
   decode();
   printf("--- remaining stack:\n");
