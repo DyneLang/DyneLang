@@ -63,7 +63,7 @@ enum class BC {
  Verbose version of a Dyne bytecode instruction including labels.
  */
 typedef struct {
-  BC bytecode;
+  BC bc;
   int arg;
   PC pc;
   int references;

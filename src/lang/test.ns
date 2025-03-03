@@ -1,8 +1,4 @@
 
 func() begin
-  a := 2;
-  b := func() begin
-    c := 3;
-  end;
-  call b with (a);
+  a := 2 and 3;
 end

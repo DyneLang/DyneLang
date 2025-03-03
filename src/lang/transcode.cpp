@@ -33,6 +33,69 @@ using namespace dyn;
 
 using namespace dyn::lang;
 
+/*
+ NewtonScript has 58 bytecode commands:
+
+ 000 pop                        x --
+ 001 dup                        x -- x x
+ 002 return                     -- (returns the value in stack[sp] to the caller)
+ 003 push-self                  -- RCVR
+ 004 set-lex-scope              func -- closure
+ 005 iter-next                  iterator --
+ 006 iter-done                  iterator -- done?
+ 007 000 001 pop-handlers       --
+ 03x push                       -- literal
+ 04x (B signed) push-constant   -- value
+ 05x call                       arg1 arg2 ... argN name -- result
+ 06x invoke                     arg1 arg2 ... argN func -- result
+ 07x send                       arg1 arg2 ... argN name receiver -- result
+ 10x send-if-defined            arg1 arg2 ... argN name receiver -- result
+ 11x resend                     arg1 arg2 ... argN name -- result
+ 12x resend-if-defined          arg1 arg2 ... argN name -- result
+ 13x branch                     --
+ 14x branch-if-true             value --
+ 15x branch-if-false            value --
+ 16x find-var                   -- value
+ 17x get-var                    -- value
+ 20x make-frame                 val1 val2 ... valN map -- frame
+ 21x make-array b=0xffff        size class -- array
+ 21x fill_array                 val1 val2 ... valN class -- array
+ 220 get-path                   object pathExpr -- value
+ 221 get-path-check             object pathExpr -- value
+ 230 set-path                   object pathExpr value --
+ 231 set-path-ret               object pathExpr value -- value
+ 24x set-var                    value --
+ 25x find-and-set-var           value --
+ 26x incr-var                   addend -- addend value
+ 27x branch-if-loop-not-done    incr index limit --
+ 30:0 add |+|                   num1 num2 -- result  (30x freq-func:)
+ 30:1 subtract |-|              num1 num2 -- result
+ 30:2 aref                      object index -- element
+ 30:3 set-aref                  object index element -- element
+ 30:4 equals |=|                obj1 obj2 -- result
+ 30:5 not |not|                 value -- result
+ 30:6 not-equals |<>|           obj1 obj2 -- result
+ 30:7 multiply |*|              num1 num2 -- result
+ 30:8 divide |/|                num1 num2 -- result
+ 30:9 div |div|                 int1 int2 -- result
+ 30:10 less-than |<|            obj1 obj2 -- result
+ 30:11 greater-than |>|         obj1 obj2 -- result
+ 30:12 greater-or-equal |>=|    obj1 obj2 -- result
+ 30:13 less-or-equal |<=|       obj1 obj2 -- result
+ 30:14 bit-and BAnd             int1 int2 -- result
+ 30:15 bit-or BOr               int1 int2 -- result
+ 30:16 bit-not BNot             int -- result
+ 30:17 new-iterator             object deeply -- iterator
+ 30:18 length Length            object -- length
+ 30:19 clone Clone              object -- clone
+ 30:20 set-class SetClass       object class -- object
+ 30:21 add-array-slot           array object -- object
+ 30:22 stringer Stringer        array -- string
+ 30:23 has-path none            object pathExpr -- result
+ 30:24 class-of ClassOf         object -- class
+ 31x new-handlers               sym1 pc1 sym2 pc2 ... symN pcN --
+*/
+
 /**
  Transcode instructions from NewtonScript bytecode to an easier to decompile list.
 
@@ -88,74 +151,74 @@ std::vector<Bytecode> dyn::lang::transcode_from_ns(dyn::RefArg ns_func)
     switch (a) {
       case 0:
         switch (b) {
-          case 0: bc.bytecode = BC::Pop; break;
-          case 1: bc.bytecode = BC::Dup; break;
-          case 2: bc.bytecode = BC::Return; break;
-          case 3: bc.bytecode = BC::PushSelf; break;
-          case 4: bc.bytecode = BC::SetLexScope; break;
-          case 5: bc.bytecode = BC::IterNext; break;
-          case 6: bc.bytecode = BC::IterDone; break;
-          case 7: bc.bytecode = BC::PopHandlers; break;
+          case 0: bc.bc = BC::Pop; break;
+          case 1: bc.bc = BC::Dup; break;
+          case 2: bc.bc = BC::Return; break;
+          case 3: bc.bc = BC::PushSelf; break;
+          case 4: bc.bc = BC::SetLexScope; break;
+          case 5: bc.bc = BC::IterNext; break;
+          case 6: bc.bc = BC::IterDone; break;
+          case 7: bc.bc = BC::PopHandlers; break;
           default:
             std::cout << "WARNING: unknown byte code a:" << (int)a << ", b:" << (int)b << ", ip:" << (int)ip << "." << std::endl;
             break;
         }
         break;
-      case 3: bc.bytecode = BC::Push; bc.arg = (int16_t)b; break;
-      case 4: bc.bytecode = BC::PushConst; bc.arg = (int16_t)b; break;
-      case 5: bc.bytecode = BC::Call; bc.arg = (int16_t)b; break;
-      case 6: bc.bytecode = BC::Invoke; bc.arg = (int16_t)b; break;
-      case 7: bc.bytecode = BC::Send; bc.arg = (int16_t)b; break;
-      case 8: bc.bytecode = BC::SendIfDefined; bc.arg = (int16_t)b; break;
-      case 9: bc.bytecode = BC::Resend; bc.arg = (int16_t)b; break;
-      case 10: bc.bytecode = BC::ResendIfDefined; bc.arg = (int16_t)b; break;
-      case 11: bc.bytecode = BC::Branch; bc.arg = (int)pc_map[b]; func[bc.arg].references++; break;
-      case 12: bc.bytecode = BC::BranchIfTrue; bc.arg = (int)pc_map[b]; func[bc.arg].references++; break;
-      case 13: bc.bytecode = BC::BranchIfFalse; bc.arg = (int)pc_map[b]; func[bc.arg].references++; break;
-      case 14: bc.bytecode = BC::FindVar; bc.arg = (int16_t)b; break;
-      case 15: bc.bytecode = BC::GetVar; bc.arg = (int16_t)b; break;
-      case 16: bc.bytecode = BC::MakeFrame; bc.arg = (int16_t)b; break;
-      case 17: bc.bytecode = BC::MakeArray; bc.arg = (int16_t)b; break;
-      case 18: bc.bytecode = BC::GetPath; bc.arg = (int16_t)b; break;
-      case 19: bc.bytecode = BC::SetPath; bc.arg = (int16_t)b; break;
-      case 20: bc.bytecode = BC::SetVar; bc.arg = (int16_t)b; break;
-      case 21: bc.bytecode = BC::FindAndSetVar; bc.arg = (int16_t)b; break;
-      case 22: bc.bytecode = BC::IncrVar; bc.arg = (int16_t)b; break;
-      case 23: bc.bytecode = BC::BranchLoop; bc.arg = b; break;
+      case 3: bc.bc = BC::Push; bc.arg = (int16_t)b; break;
+      case 4: bc.bc = BC::PushConst; bc.arg = (int16_t)b; break;
+      case 5: bc.bc = BC::Call; bc.arg = (int16_t)b; break;
+      case 6: bc.bc = BC::Invoke; bc.arg = (int16_t)b; break;
+      case 7: bc.bc = BC::Send; bc.arg = (int16_t)b; break;
+      case 8: bc.bc = BC::SendIfDefined; bc.arg = (int16_t)b; break;
+      case 9: bc.bc = BC::Resend; bc.arg = (int16_t)b; break;
+      case 10: bc.bc = BC::ResendIfDefined; bc.arg = (int16_t)b; break;
+      case 11: bc.bc = BC::Branch; bc.arg = (int)pc_map[b]; func[bc.arg].references++; break;
+      case 12: bc.bc = BC::BranchIfTrue; bc.arg = (int)pc_map[b]; func[bc.arg].references++; break;
+      case 13: bc.bc = BC::BranchIfFalse; bc.arg = (int)pc_map[b]; func[bc.arg].references++; break;
+      case 14: bc.bc = BC::FindVar; bc.arg = (int16_t)b; break;
+      case 15: bc.bc = BC::GetVar; bc.arg = (int16_t)b; break;
+      case 16: bc.bc = BC::MakeFrame; bc.arg = (int16_t)b; break;
+      case 17: bc.bc = BC::MakeArray; bc.arg = (int16_t)b; break;
+      case 18: bc.bc = BC::GetPath; bc.arg = (int16_t)b; break;
+      case 19: bc.bc = BC::SetPath; bc.arg = (int16_t)b; break;
+      case 20: bc.bc = BC::SetVar; bc.arg = (int16_t)b; break;
+      case 21: bc.bc = BC::FindAndSetVar; bc.arg = (int16_t)b; break;
+      case 22: bc.bc = BC::IncrVar; bc.arg = (int16_t)b; break;
+      case 23: bc.bc = BC::BranchLoop; bc.arg = b; break;
         // TODO: BranchLoop pushes jump destinations onto the stack
       case 24:
         switch (b) {
-          case 0: bc.bytecode = BC::Add; break;
-          case 1: bc.bytecode = BC::Subtract; break;
-          case 2: bc.bytecode = BC::ARef; break;
-          case 3: bc.bytecode = BC::SetARef; break;
-          case 4: bc.bytecode = BC::Equals; break;
-          case 5: bc.bytecode = BC::Not; break;
-          case 6: bc.bytecode = BC::NotEquals; break;
-          case 7: bc.bytecode = BC::Multiply; break;
-          case 8: bc.bytecode = BC::Divide; break;
-          case 9: bc.bytecode = BC::Div; break;
-          case 10: bc.bytecode = BC::LessThan; break;
-          case 11: bc.bytecode = BC::GreaterThan; break;
-          case 12: bc.bytecode = BC::GreaterOrEqual; break;
-          case 13: bc.bytecode = BC::LessOrEqual; break;
-          case 14: bc.bytecode = BC::BitAnd; break;
-          case 15: bc.bytecode = BC::BitOr; break;
-          case 16: bc.bytecode = BC::BitNot; break;
-          case 17: bc.bytecode = BC::NewIter; break;
-          case 18: bc.bytecode = BC::Length; break;
-          case 19: bc.bytecode = BC::Clone; break;
-          case 20: bc.bytecode = BC::SetClass; break;
-          case 21: bc.bytecode = BC::AddArraySlot; break;
-          case 22: bc.bytecode = BC::Stringer; break;
-          case 23: bc.bytecode = BC::HasPath; break;
-          case 24: bc.bytecode = BC::ClassOf; break;
+          case 0: bc.bc = BC::Add; break;
+          case 1: bc.bc = BC::Subtract; break;
+          case 2: bc.bc = BC::ARef; break;
+          case 3: bc.bc = BC::SetARef; break;
+          case 4: bc.bc = BC::Equals; break;
+          case 5: bc.bc = BC::Not; break;
+          case 6: bc.bc = BC::NotEquals; break;
+          case 7: bc.bc = BC::Multiply; break;
+          case 8: bc.bc = BC::Divide; break;
+          case 9: bc.bc = BC::Div; break;
+          case 10: bc.bc = BC::LessThan; break;
+          case 11: bc.bc = BC::GreaterThan; break;
+          case 12: bc.bc = BC::GreaterOrEqual; break;
+          case 13: bc.bc = BC::LessOrEqual; break;
+          case 14: bc.bc = BC::BitAnd; break;
+          case 15: bc.bc = BC::BitOr; break;
+          case 16: bc.bc = BC::BitNot; break;
+          case 17: bc.bc = BC::NewIter; break;
+          case 18: bc.bc = BC::Length; break;
+          case 19: bc.bc = BC::Clone; break;
+          case 20: bc.bc = BC::SetClass; break;
+          case 21: bc.bc = BC::AddArraySlot; break;
+          case 22: bc.bc = BC::Stringer; break;
+          case 23: bc.bc = BC::HasPath; break;
+          case 24: bc.bc = BC::ClassOf; break;
           default:
             std::cout << "WARNING: unknown byte code a:" << (int)a << ", b:" << (int)b << ", ip:" << (int)ip << "." << std::endl;
             break;
         }
         break;
-      case 25: bc.bytecode = BC::NewHandler; bc.arg = (int16_t)b; break;
+      case 25: bc.bc = BC::NewHandler; bc.arg = (int16_t)b; break;
       default:
         std::cout << "WARNING: unknown byte code a:" << (int)a << ", b:" << (int)b << ", ip:" << (int)ip << "." << std::endl;
         break;

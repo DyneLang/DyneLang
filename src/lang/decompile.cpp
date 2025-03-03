@@ -32,73 +32,13 @@
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
+#include <cassert>
 
 using namespace dyn;
 
 using namespace dyn::lang;
 
 /*
- We have 58 bytecode commands:
-
- 000 pop                        x --
- 001 dup                        x -- x x
- 002 return                     -- (returns the value in stack[sp] to the caller)
- 003 push-self                  -- RCVR
- 004 set-lex-scope              func -- closure
- 005 iter-next                  iterator --
- 006 iter-done                  iterator -- done?
- 007 000 001 pop-handlers       --
- 03x push                       -- literal
- 04x (B signed) push-constant   -- value
- 05x call                       arg1 arg2 ... argN name -- result
- 06x invoke                     arg1 arg2 ... argN func -- result
- 07x send                       arg1 arg2 ... argN name receiver -- result
- 10x send-if-defined            arg1 arg2 ... argN name receiver -- result
- 11x resend                     arg1 arg2 ... argN name -- result
- 12x resend-if-defined          arg1 arg2 ... argN name -- result
- 13x branch                     --
- 14x branch-if-true             value --
- 15x branch-if-false            value --
- 16x find-var                   -- value
- 17x get-var                    -- value
- 20x make-frame                 val1 val2 ... valN map -- frame
- 21x make-array b=0xffff        size class -- array
- 21x fill_array                 val1 val2 ... valN class -- array
- 220 get-path                   object pathExpr -- value
- 221 get-path-check             object pathExpr -- value
- 230 set-path                   object pathExpr value --
- 231 set-path-ret               object pathExpr value -- value
- 24x set-var                    value --
- 25x find-and-set-var           value --
- 26x incr-var                   addend -- addend value
- 27x branch-if-loop-not-done    incr index limit --
- 30:0 add |+|                   num1 num2 -- result  (30x freq-func:)
- 30:1 subtract |-|              num1 num2 -- result
- 30:2 aref                      object index -- element
- 30:3 set-aref                  object index element -- element
- 30:4 equals |=|                obj1 obj2 -- result
- 30:5 not |not|                 value -- result
- 30:6 not-equals |<>|           obj1 obj2 -- result
- 30:7 multiply |*|              num1 num2 -- result
- 30:8 divide |/|                num1 num2 -- result
- 30:9 div |div|                 int1 int2 -- result
- 30:10 less-than |<|            obj1 obj2 -- result
- 30:11 greater-than |>|         obj1 obj2 -- result
- 30:12 greater-or-equal |>=|    obj1 obj2 -- result
- 30:13 less-or-equal |<=|       obj1 obj2 -- result
- 30:14 bit-and BAnd             int1 int2 -- result
- 30:15 bit-or BOr               int1 int2 -- result
- 30:16 bit-not BNot             int -- result
- 30:17 new-iterator             object deeply -- iterator
- 30:18 length Length            object -- length
- 30:19 clone Clone              object -- clone
- 30:20 set-class SetClass       object class -- object
- 30:21 add-array-slot           array object -- object
- 30:22 stringer Stringer        array -- string
- 30:23 has-path none            object pathExpr -- result
- 30:24 class-of ClassOf         object -- class
- 31x new-handlers               sym1 pc1 sym2 pc2 ... symN pcN --
-
  TODO: use an enum class for the precedence level
  12    kTokenAssign
  11    kTokenAnd kTokenOr
@@ -114,24 +54,6 @@ using namespace dyn::lang;
        : :? message send, conditional sen
        . slot access
  */
-
-// TODO: bytecode here meand Dyne bytecode. Move all Newton bytecode references to 'transcode.cpp'
-// TODO: have a function that converts bytecode index into altcode index
-// TODO: find literals that will build a 'for' loop, so we can preprocess that
-// TODO: 'foreach': new_iter, iter_next
-
-using BCIP = size_t;
-
-Bytecode dc_empty { BC::EndOfFile, 0, 0, 0 };
-// TODO: rename this, it's the current state of the Decompiler
-// TODO: add the global variables to it and make sure the destructor works
-class State {
-public:
-  PC pc { 0 };
-  Bytecode &bytecode { dc_empty };
-};
-
-typedef int (*VcHandler)(State&);
 
 enum class ND {
   EndOfStack, Unknown, Error, Expr, Statement, Condition,
@@ -155,17 +77,133 @@ public:
   // - add the original AltCode here?
 };
 
-static std::vector<Bytecode> altcode { };
+// TODO: this is now part of the class Decompiler. Define it there or remove it.
+Bytecode dc_empty { BC::EndOfFile, 0, 0, 0 };
+class State {
+public:
+  PC pc { 0 };
+  Bytecode &bytecode { dc_empty };
+};
 
-/*
- A stack holding the syntax nodes as we decompile.
- We may have to use a tree instead of a stack if things get
- too complicated.
- */
-static std::vector<Node> stack { };
+class Decompiler;
+typedef int (Decompiler::*BytecodeHandler)();
+
+class Decompiler {
+private:
+  // Control Flow helpers:
+  int CheckTryOnExpression();
+  int CheckForeach();
+  int CheckForLoop();
+  int CheckEndlessLoop();
+  int CheckRepeatBreakUntil();
+  int CheckRepeatUntil();
+  int CheckWhileBreakDo();
+  int CheckWhileDo();
+  int CheckLogicOr();
+  int CheckIfThenElse();
+  int CheckLogicAnd();
+  int DoLabel();
+  // Bytecode helpers:
+  int DoInfixOperator(const std::string &op, int precedence);
+  int DoSend(const std::string &op, const std::string &call, bool is_resend);
+  int DoCallOrInvoke(const std::string &call, int which);
+  int DoArgList(std::string &args, int num_args);
+  // handle all known bytecodes:
+  int DoEOF();
+  int DoPop();
+  int DoDup() { return -2; }
+  int DoReturn();
+  int DoPushSelf();
+  int DoSetLexScope() { return -2; }
+  int DoIterNext() { return -2; }
+  int DoIterDone() { return -2; }
+  int DoPopHandlers() { return -2; };
+  int DoPush();
+  int DoPushConst();
+  int DoCall();
+  int DoInvoke();
+  int DoSend();
+  int DoSendIfDefined();
+  int DoResend();
+  int DoResendIfDefined();
+  int DoBranch();
+  int DoBranchIfTrue();
+  int DoBranchIfFalse();
+  int DoFindVar();
+  int DoGetVar() { return -2; };
+  int DoMakeFrame() { return -2; };
+  int DoMakeArray() { return -2; };
+  int DoFillArray() { return -2; };
+  int DoGetPath() { return -2; };
+  int DoGetPathCheck() { return -2; };
+  int DoSetPath() { return -2; };
+  int DoSetPathVal() { return -2; };
+  int DoSetVar() { return -2; };
+  int DoFindAndSetVar();
+  int DoIncrVar() { return -2; };
+  int DoBranchLoop() { return -2; };
+  int DoAdd();
+  int DoSubtract();
+  int DoARef() { return -2; };
+  int DoSetARef() { return -2; };
+  int DoEquals();
+  int DoNot() { return -2; };
+  int DoNotEquals();
+  int DoMultiply();
+  int DoDivide();
+  int DoDiv() { return -2; };
+  int DoLessThan();
+  int DoGreaterThan();
+  int DoGreaterOrEqual();
+  int DoLessOrEqual();
+  int DoBitAnd() { return -2; };
+  int DoBitOr() { return -2; };
+  int DoBitNot() { return -2; };
+  int DoNewIter() { return -2; };
+  int DoLength() { return -2; };
+  int DoClone() { return -2; };
+  int DoSetClass() { return -2; };
+  int DoAddArraySlot() { return -2; };
+  int DoStringer() { return -2; };
+  int DoHasPath() { return -2; };
+  int DoClassOf() { return -2; };
+  int DoNewHandler() { return -2; };
+  int DoUnknown() { return -2; };
+public:
+  std::vector<Bytecode> instructions { };
+  std::vector<Node> stack { };
+  State state;
+public:
+  static const BytecodeHandler handler[];
+  int Do(BC bc) {
+    assert ((bc >= BC::EndOfFile) || (bc <= BC::Unknown));
+    return (*this.*handler[(size_t)bc])(); }
+  bool decode();
+};
+
+const BytecodeHandler Decompiler::handler[] = {
+  &Decompiler::DoEOF, &Decompiler::DoPop, &Decompiler::DoDup, &Decompiler::DoReturn,
+  &Decompiler::DoPushSelf, &Decompiler::DoSetLexScope, &Decompiler::DoIterNext, &Decompiler::DoIterDone,
+  &Decompiler::DoPopHandlers, &Decompiler::DoPush, &Decompiler::DoPushConst, &Decompiler::DoCall,
+  &Decompiler::DoInvoke, &Decompiler::DoSend, &Decompiler::DoSendIfDefined, &Decompiler::DoResend,
+  &Decompiler::DoResendIfDefined, &Decompiler::DoBranch, &Decompiler::DoBranchIfTrue, &Decompiler::DoBranchIfFalse,
+  &Decompiler::DoFindVar, &Decompiler::DoGetVar, &Decompiler::DoMakeFrame, &Decompiler::DoMakeArray,
+  &Decompiler::DoFillArray, &Decompiler::DoGetPath, &Decompiler::DoGetPathCheck, &Decompiler::DoSetPath,
+  &Decompiler::DoSetPathVal, &Decompiler::DoSetVar, &Decompiler::DoFindAndSetVar, &Decompiler::DoIncrVar,
+  &Decompiler::DoBranchLoop, &Decompiler::DoAdd, &Decompiler::DoSubtract, &Decompiler::DoARef,
+  &Decompiler::DoSetARef, &Decompiler::DoEquals, &Decompiler::DoNot, &Decompiler::DoNotEquals,
+  &Decompiler::DoMultiply, &Decompiler::DoDivide, &Decompiler::DoDiv, &Decompiler::DoLessThan,
+  &Decompiler::DoGreaterThan, &Decompiler::DoGreaterOrEqual, &Decompiler::DoLessOrEqual, &Decompiler::DoBitAnd,
+  &Decompiler::DoBitOr, &Decompiler::DoBitNot, &Decompiler::DoNewIter, &Decompiler::DoLength,
+  &Decompiler::DoClone, &Decompiler::DoSetClass, &Decompiler::DoAddArraySlot, &Decompiler::DoStringer,
+  &Decompiler::DoHasPath, &Decompiler::DoClassOf, &Decompiler::DoNewHandler, &Decompiler::DoUnknown
+};
 
 
-void PrintStack() {
+
+
+
+void PrintStack(const std::vector<Node> &stack) {
   for (auto &state: stack) {
     switch (state.type) {
       case ND::EndOfStack:       std::cout << "------------: "; break;
@@ -186,20 +224,27 @@ void PrintStack() {
   }
 }
 
-int DoUnknown(State &state) {
-  stack.push_back( {
-    ND::Unknown, 0,
-    "ERROR: Unknown altcode " + std::to_string((int)state.bytecode.bytecode) + ", " + std::to_string(state.bytecode.arg)
-    + " at " + std::to_string(state.bytecode.pc) } );
-  return 1;
-}
+//int DoUnknown(State &state) {
+//  stack.push_back( {
+//    ND::Unknown, 0,
+//    "ERROR: Unknown altcode " + std::to_string((int)state.bytecode.bc) + ", " + std::to_string(state.bytecode.arg)
+//    + " at " + std::to_string(state.bytecode.pc) } );
+//  return 1;
+//}
 
-int DoEOF(State &state) {
-  (void)state;
+/**
+ Handle the end of function marker.
+ \return -1 to tell the analyser that we reached the end of the function
+ */
+int Decompiler::DoEOF() {
   return -1;
 }
 
-int DoPushConst(State &state) {
+/**
+ Push a reference to an immediate onto the stack.
+ \return number of bytecodes consumed
+ */
+int Decompiler::DoPushConst() {
   int info = 0;
   if (state.bytecode.arg ==  2) info = 1; // push_const nil
   if (state.bytecode.arg == 26) info = 2; // push_const true
@@ -210,7 +255,14 @@ int DoPushConst(State &state) {
   return 1;
 }
 
-int DoInfixOperator(State &state, const std::string &op, int precedence) {
+/**
+ Handle infix operators like '+', '*', '<=', and more.
+ \param[in] op Operator as it will appear in the source code.
+ \param[in] precedence Level of precedence of this operation so we can determine
+    if the left or right expression need to be bracketed.
+ \return number of bytecodes consumed
+ */
+int Decompiler::DoInfixOperator(const std::string &op, int precedence) {
   (void)state;
   Node s1 = stack.back(); stack.pop_back();
   if (s1.type != ND::Expr) {
@@ -232,17 +284,17 @@ int DoInfixOperator(State &state, const std::string &op, int precedence) {
 }
 
 // equality and relational operators
-int DoEquals(State &state) { return DoInfixOperator(state, "=", 9); }
-int DoNotEquals(State &state) { return DoInfixOperator(state, "<>", 9); }
-int DoGreaterOrEqual(State &state) { return DoInfixOperator(state, ">=", 9); }
-int DoGreaterThan(State &state) { return DoInfixOperator(state, ">", 9); }
-int DoLessOrEqual(State &state) { return DoInfixOperator(state, "<=", 9); }
-int DoLessThan(State &state) { return DoInfixOperator(state, "<", 9); }
+int Decompiler::DoEquals() { return DoInfixOperator("=", 9); }
+int Decompiler::DoNotEquals() { return DoInfixOperator("<>", 9); }
+int Decompiler::DoGreaterOrEqual() { return DoInfixOperator(">=", 9); }
+int Decompiler::DoGreaterThan() { return DoInfixOperator(">", 9); }
+int Decompiler::DoLessOrEqual() { return DoInfixOperator("<=", 9); }
+int Decompiler::DoLessThan() { return DoInfixOperator("<", 9); }
 // arithmetic operators
-int DoAdd(State &state) { return DoInfixOperator(state, "+", 6); }
-int DoSubtract(State &state) { return DoInfixOperator(state, "-", 6); }
-int DoMultiply(State &state) { return DoInfixOperator(state, "*", 5); }
-int DoDivide(State &state) { return DoInfixOperator(state, "/", 5); }
+int Decompiler::DoAdd() { return DoInfixOperator("+", 6); }
+int Decompiler::DoSubtract() { return DoInfixOperator("-", 6); }
+int Decompiler::DoMultiply() { return DoInfixOperator("*", 5); }
+int Decompiler::DoDivide() { return DoInfixOperator("/", 5); }
 // TODO: div mod << >>
 //   a div b
 //   mod(a, b)  // expr; expr; lit; call #2
@@ -259,17 +311,17 @@ int DoDivide(State &state) { return DoInfixOperator(state, "/", 5); }
 //    -> HasVar(a);
 
 
-int DoReturn(State &state) {
+int Decompiler::DoReturn() {
   Node s = stack.back();
   // Handle the 'return' command at the end of the function.
-  if (altcode[state.pc+1].bytecode == BC::EndOfFile) {
+  if (instructions[state.pc+1].bc == BC::EndOfFile) {
     // The compiler added a 'return' even though it was not needed. Don't output anything
     if (s.type != ND::Expr) {
       return 1;
     }
     // The compiler added a 'return NIL'. This is the default if there is no
     // return command, so don't write anything.
-    if ((state.pc > 0) && (altcode[state.pc-1].bytecode == BC::PushConst) && (altcode[state.pc-1].arg == 2)) {
+    if ((state.pc > 0) && (instructions[state.pc-1].bc == BC::PushConst) && (instructions[state.pc-1].arg == 2)) {
       stack.pop_back();
       return 1;
     }
@@ -290,7 +342,7 @@ int DoReturn(State &state) {
  \param[inout] state the current state of the decompiler
  \return 1 if this was an 'and' operation, 0 if not
  */
-int CheckLogicAnd(State &state) {
+int Decompiler::CheckLogicAnd() {
   if (stack.size()<6) // not really needed, but makes the code faster
     return 0;
   size_t n = stack.size();
@@ -320,7 +372,7 @@ int CheckLogicAnd(State &state) {
  \param[inout] state the current state of the decompiler
  \return 1 if this was an 'and' operation, 0 if not
  */
-int CheckLogicOr(State &state) {
+int Decompiler::CheckLogicOr() {
   if (stack.size()<6) // not really needed, but makes the code faster
     return 0;
   size_t n = stack.size();
@@ -377,7 +429,7 @@ int CheckLogicOr(State &state) {
  \endcode
  \note if..then is an expression and returns a value!
  */
-int CheckIfThenElse(State &state) {
+int Decompiler::CheckIfThenElse() {
   (void)state;
 //  PC label_ // it's not the PC but the index in the stack :-/
 //  PC c = n-1;
@@ -424,7 +476,7 @@ int CheckIfThenElse(State &state) {
  \endcode
  \note The code changes substantially if there is a 'break' statement
  */
-int CheckWhileDo(State &state) {
+int Decompiler::CheckWhileDo() {
   (void)state;
   return 0;
 }
@@ -444,7 +496,7 @@ int CheckWhileDo(State &state) {
  \endcode
  \note The code changes substantially if there is a 'break' statement
  */
-int CheckWhileBreakDo(State &state) {
+int Decompiler::CheckWhileBreakDo() {
   (void)state;
   return 0;
 }
@@ -457,7 +509,7 @@ int CheckWhileBreakDo(State &state) {
     branch_if_false_back a
  \endcode
  */
-int CheckRepeatUntil(State &state) {
+int Decompiler::CheckRepeatUntil() {
   (void)state;
   return 0;
 }
@@ -475,7 +527,7 @@ int CheckRepeatUntil(State &state) {
  label b
  \endcode
  */
-int CheckRepeatBreakUntil(State &state) {
+int Decompiler::CheckRepeatBreakUntil() {
   (void)state;
   return 0;
 }
@@ -491,7 +543,7 @@ int CheckRepeatBreakUntil(State &state) {
  label b
  \endcode
  */
-int CheckEndlessLoop(State &state) {
+int Decompiler::CheckEndlessLoop() {
   (void)state;
   return 0;
 }
@@ -516,7 +568,7 @@ int CheckEndlessLoop(State &state) {
     branch_loop b
  \endcode
  */
-int CheckForLoop(State &state) {
+int Decompiler::CheckForLoop() {
   (void)state;
   return 0;
 }
@@ -547,7 +599,7 @@ int CheckForLoop(State &state) {
  \endcode
  \note foreach [slot,] value [deeply] in {frame | array} {collect | do} expression
  */
-int CheckForeach(State &state) {
+int Decompiler::CheckForeach() {
   (void)state;
   return 0;
 }
@@ -573,17 +625,17 @@ int CheckForeach(State &state) {
 
  \endcode
  */
-int CheckTryOnExpression(State &state) {
+int Decompiler::CheckTryOnExpression() {
   (void)state;
   return 0;
 }
 
-int DoLabel(State &state) {
+int Decompiler::DoLabel() {
   // Repeat finding actions related to this label until all found.
   for (;;) {
-    if (CheckLogicAnd(state) == 1) continue;
-    if (CheckLogicOr(state) == 1) continue;
-    if (CheckIfThenElse(state) == 1) continue;
+    if (CheckLogicAnd() == 1) continue;
+    if (CheckLogicOr() == 1) continue;
+    if (CheckIfThenElse() == 1) continue;
     // check "while ... break ... do ... "
     // check "if ... then" and "if ... then ... else"
     break;
@@ -599,7 +651,7 @@ int DoLabel(State &state) {
   return 1;
 }
 
-int DoBranch(State &state) {
+int Decompiler::DoBranch() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
     stack.push_back( { ND::BranchFwd, state.bytecode.arg, "ND::BranchFwd"} );
@@ -608,7 +660,7 @@ int DoBranch(State &state) {
   return 1;
 }
 
-int DoBranchIfTrue(State &state) {
+int Decompiler::DoBranchIfTrue() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
     stack.push_back( { ND::BranchTrueFwd, state.bytecode.arg, "ND::BranchTrueFwd"} );
@@ -618,7 +670,7 @@ int DoBranchIfTrue(State &state) {
   return 1;
 }
 
-int DoBranchIfFalse(State &state) {
+int Decompiler::DoBranchIfFalse() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
     stack.push_back( { ND::BranchFalseFwd, state.bytecode.arg, "ND::BranchFalseFwd"} );
@@ -636,7 +688,7 @@ int DoBranchIfFalse(State &state) {
 /**
  \note check if 'pop' cancel out an expr
  */
-int DoPop(State &state) {
+int Decompiler::DoPop() {
   Node &s = stack.back();
   if (s.type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": 'pop': expected expression on stack!\n" << std::endl;
@@ -646,7 +698,7 @@ int DoPop(State &state) {
   return 1;
 }
 
-int DoArgList(State &state, std::string &args, int num_args) {
+int Decompiler::DoArgList(std::string &args, int num_args) {
   for (int i=0; i<num_args; ++i) {
     Node &arg = stack.back();
     if (arg.type != ND::Expr) {
@@ -662,7 +714,7 @@ int DoArgList(State &state, std::string &args, int num_args) {
   return 1;
 }
 
-int DoCallOrInvoke(State &state, const std::string &call, int which) {
+int Decompiler::DoCallOrInvoke(const std::string &call, int which) {
   Node s = stack.back();
   if (s.type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": '" << call << "': expected function name on stack!\n" << std::endl;
@@ -670,7 +722,7 @@ int DoCallOrInvoke(State &state, const std::string &call, int which) {
   }
   stack.pop_back();
   std::string args { };
-  if (DoArgList(state, args, state.bytecode.arg) == -1)
+  if (DoArgList(args, state.bytecode.arg) == -1)
     return -1;
   if (which == 0) // call
     stack.push_back( { ND::Expr, 0, s.text + "(" + args + ")" } );
@@ -679,10 +731,10 @@ int DoCallOrInvoke(State &state, const std::string &call, int which) {
   return 1;
 }
 
-int DoCall(State &state) { return DoCallOrInvoke(state, "call", 0); }
-int DoInvoke(State &state) { return DoCallOrInvoke(state, "invoke", 1); }
+int Decompiler::DoCall() { return DoCallOrInvoke("call", 0); }
+int Decompiler::DoInvoke() { return DoCallOrInvoke("invoke", 1); }
 
-int DoSend(State &state, const std::string &op, const std::string &call, bool is_resend) {
+int Decompiler::DoSend(const std::string &op, const std::string &call, bool is_resend) {
   Node name = stack.back();
   if (name.type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": '" << call << "': expected message name on stack!\n" << std::endl;
@@ -699,7 +751,7 @@ int DoSend(State &state, const std::string &op, const std::string &call, bool is
     stack.pop_back();
   }
   std::string args { };
-  if (DoArgList(state, args, state.bytecode.arg) == -1)
+  if (DoArgList(args, state.bytecode.arg) == -1)
     return -1;
   if (is_resend)
     stack.push_back( { ND::Expr, 0, "inherited" + op + name.text + "(" + args + ")" } );
@@ -708,24 +760,24 @@ int DoSend(State &state, const std::string &op, const std::string &call, bool is
   return 1;
 }
 
-int DoSend(State &state) { return DoSend(state, ":", "send", false); }
-int DoSendIfDefined(State &state) { return DoSend(state, ":?", "send_if_defined", false); }
-int DoResend(State &state) { return DoSend(state, ":", "resend", true); }
-int DoResendIfDefined(State &state) { return DoSend(state, ":?", "resend_if_defined", true); }
+int Decompiler::DoSend() { return DoSend(":", "send", false); }
+int Decompiler::DoSendIfDefined() { return DoSend(":?", "send_if_defined", false); }
+int Decompiler::DoResend() { return DoSend(":", "resend", true); }
+int Decompiler::DoResendIfDefined() { return DoSend(":?", "resend_if_defined", true); }
 
-int DoPush(State &state) {
+int Decompiler::DoPush() {
   (void)state;
   stack.push_back( { ND::Expr, 0, "lit_" + std::to_string(state.bytecode.arg)} );
   return 1;
 }
 
-int DoFindVar(State &state) {
+int Decompiler::DoFindVar() {
   (void)state;
   stack.push_back( { ND::Expr, 0, "lit_" + std::to_string(state.bytecode.arg)} );
   return 1;
 }
 
-int DoPushSelf(State &state) {
+int Decompiler::DoPushSelf() {
   (void)state;
   stack.push_back( { ND::Expr, 0, "self"} );
   return 1;
@@ -737,7 +789,7 @@ int DoPushSelf(State &state) {
  \param[inout] state the state of the decompiler
  \return -1 for end of func, <-1 for error, or the number of bytes consumed
  */
-int DoFindAndSetVar(State &state) {
+int Decompiler::DoFindAndSetVar() {
   Node value = stack.back();
   if (value.type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": 'find_and_set_var': expected expression on stack!\n" << std::endl;
@@ -748,54 +800,11 @@ int DoFindAndSetVar(State &state) {
   return 1;
 }
 
-/**
- Prototype.
- \param[inout] state the state of the decompiler
- \return -1 for end of func, <-1 for error, or the number of bytes consumed
- */
-int DoXXX(State &state) {
-  (void)state;
-  return 1;
-}
-
-VcHandler handler[] = {
-//DC::EOF,             DC::Pop,             DC::Dup,             DC::Return,
-  DoEOF,              DoPop,              DoUnknown,          DoReturn,
-//DC::PushSelf,        DC::SetLexScope,     DC::IterNext,        DC::IterDone,
-  DoPushSelf,         DoUnknown,          DoUnknown,          DoUnknown,
-//DC::PopHandlers,     DC::Push,            DC::PushConst,       DC::Call,
-  DoUnknown,          DoPush,             DoPushConst,        DoCall,
-//DC::Invoke,          DC::Send,            DC::SendIfDefined,   DC::Resend,
-  DoInvoke,           DoSend,             DoSendIfDefined,    DoResend,
-//DC::ResendIfDefined, DC::Branch,          DC::BranchIfTrue,    DC::BranchIfFalse,
-  DoResendIfDefined,  DoBranch,           DoBranchIfTrue,     DoBranchIfFalse,
-//DC::FindVar,         DC::GetVar,          DC::MakeFrame,       DC::MakeArray,
-  DoFindVar,          DoUnknown,          DoUnknown,          DoUnknown,
-//DC::FillArray,       DC::GetPath,         DC::GetPathCheck,    DC::SetPath,
-  DoUnknown,          DoUnknown,          DoUnknown,          DoUnknown,
-//DC::SetPathVal,      DC::SetVar,          DC::FindAndSetVar,   DC::IncrVar,
-  DoUnknown,          DoUnknown,          DoFindAndSetVar,    DoUnknown,
-//DC::BranchLoop,      DC::Add,             DC::Subtract,        DC::ARef,
-  DoUnknown,          DoAdd,              DoSubtract,         DoUnknown,
-//DC::SetARef,         DC::Equals,          DC::Not,             DC::NotEquals,
-  DoUnknown,          DoEquals,           DoUnknown,          DoNotEquals,
-//DC::Multiply,        DC::Divide,          DC::Div,             DC::LessThan,
-  DoMultiply,         DoDivide,           DoUnknown,          DoLessThan,
-//DC::GreaterThan,     DC::GreaterOrEqual,  DC::LessOrEqual,     DC::BitAnd,
-  DoGreaterThan,      DoGreaterOrEqual,   DoLessOrEqual,      DoUnknown,
-//DC::BitOr,           DC::BitNot,          DC::NewIter,         DC::Length,
-  DoUnknown,          DoUnknown,          DoUnknown,          DoUnknown,
-//DC::Clone,           DC::SetClass,        DC::AddArraySlot,    DC::Stringer,
-  DoUnknown,          DoUnknown,          DoUnknown,          DoUnknown,
-//DC::HasPath,         DC::ClassOf,         DC::NewHandler,      DC::Label
-  DoUnknown,          DoUnknown,          DoUnknown,          DoLabel,
-};
-
 static void print_altcode(int ip, Bytecode &ac) {
   if (ac.references)
-    std::cout << std::setw(4) << ip << ": label[" << ac.references << "]:" << std::endl;
+    std::cout << std::setw(4) << ip << ": label[refs=" << ac.references << "]:" << std::endl;
   std::cout << std::setw(4) << ip << ": ";
-  switch (ac.bytecode) {
+  switch (ac.bc) {
     case BC::EndOfFile:        std::cout << "    EOF" << std::endl; break;
     case BC::Pop:              std::cout << "    pop" << std::endl; break;
     case BC::Dup:              std::cout << "    dup" << std::endl; break;
@@ -856,7 +865,7 @@ static void print_altcode(int ip, Bytecode &ac) {
     case BC::ClassOf:          std::cout << "    class_of" << std::endl; break;
     case BC::NewHandler:       std::cout << "    new_handler #exc_" << ac.arg << std::endl; break;
     default:
-      std::cout << "ERROR: unknown altcode: a=" << (int)ac.bytecode << ", b=" << ac.arg << "." << std::endl; break;
+      std::cout << "ERROR: unknown altcode: a=" << (int)ac.bc << ", b=" << ac.arg << "." << std::endl; break;
   }
 }
 
@@ -867,27 +876,27 @@ void dyn::lang::print_bytecode(std::vector<Bytecode> &func) {
   }
 }
 
-bool decode() {
-  State state;
+bool Decompiler::decode() {
   int num_altcodes_handled = 0;
-  for (size_t i=0; i<altcode.size(); ) {
-    if (altcode[i].references) {
+  size_t i = 0;
+  for ( ; i<instructions.size(); ) {
+    if (instructions[i].references) {
       state.pc = i;
-      state.bytecode = altcode[i];
-      DoLabel(state);
+      state.bytecode = instructions[i];
+      DoLabel();
     }
     state.pc = i;
-    state.bytecode = altcode[i];
-    num_altcodes_handled = handler[(int)state.bytecode.bytecode](state);
+    state.bytecode = instructions[i];
+    num_altcodes_handled = Do(state.bytecode.bc);
     if (num_altcodes_handled <= 0) break;
     i += num_altcodes_handled;
   }
   if (num_altcodes_handled < -1) {
-    std::cout << "ERROR: can't decode altcodes." << std::endl;
+    std::cout << "ERROR: can't decode bytecode at pc " << i << "." << std::endl;
     return false;
   }
   if (num_altcodes_handled == 0) {
-    std::cout << "ERROR: unknown altcode found." << std::endl;
+    std::cout << "ERROR: unknown bytecode found." << std::endl;
     return false;
   }
   return true;
@@ -896,16 +905,17 @@ bool decode() {
 
 Ref dyn::lang::decompile(RefArg func)
 {
-  altcode = transcode_from_ns(func);
-  if (altcode.empty())
+  Decompiler decompiler;
+  decompiler.instructions = transcode_from_ns(func);
+  if (decompiler.instructions.empty())
     return RefNIL;
   printf("--- expanded byte code\n");
-  print_bytecode(altcode);
-  stack.push_back( { ND::EndOfStack, 0, "... stack bottom ..." } );
+  print_bytecode(decompiler.instructions);
+  decompiler.stack.push_back( { ND::EndOfStack, 0, "... stack bottom ..." } );
   printf("--- decode\n");
-  decode();
+  decompiler.decode();
   printf("--- remaining stack:\n");
-  PrintStack();
+  PrintStack(decompiler.stack);
 
 //  std::cout << stack.back() << std::endl; stack.pop_back();
 
