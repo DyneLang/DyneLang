@@ -117,6 +117,54 @@ int Ref::Print(dyn::io::PrintState &ps) const
   return 0;
 }
 
+std::string dyn::Ref::ToString() const {
+  switch (tag_()) {
+    case kTagPointer:
+      return o_->ToString();
+    case kTagInteger:
+      return std::to_string(tag_value_());
+    case kTagImmed:
+      switch (immed_()) {
+        case kImmedChar:
+          return "[ERROR: Ref.ToString: unicode]";
+        case kImmedSpecial:
+          if (*this == RefNIL) {
+            return "NIL";
+          } else if (*this == Ref::kPlainFuncClass) {
+            return "[ERROR: Ref.ToString: __PlainFuncClass]";
+          } else if (*this == Ref::kPlainCFunctionClass) {
+            return "[ERROR: Ref.ToString: __PlainCFunctionClass]";
+          } else if (*this == Ref::kBinCFunctionClass) {
+            return "[ERROR: Ref.ToString: __BinCFunctionClass]";
+          } else {
+            return "[ERROR: Ref.ToString: special:" + std::to_string(immed_value_()) + "]";
+          }
+          break;
+        case kImmedBoolean:
+          if (immed_value_() == 1) {
+            return "TRUE";
+          } else {
+            return "[ERROR: Ref.ToString: undefined boolean:" + std::to_string(immed_value_()) + "]";
+          }
+          break;
+        case kImmedReserved:
+          return "[ERROR: Ref.ToString: reserved:" + std::to_string(immed_value_()) + "]";
+      }
+      break;
+    case kTagMagicPtr: {
+      int table = static_cast<int>(r_ >> 14);
+      int index = static_cast<int>((r_ >> 4) & 0x00000fff);
+      if (table) {
+        return "@" + std::to_string(table) + "." + std::to_string(index);
+      } else {
+        return "@" + std::to_string(index);
+      }
+      break; }
+  }
+  return "[ERROR: Ref: can't convert]";
+}
+
+
 const Ref Ref::kWeakArrayClass      { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(1<<kImmedShift)) };
 const Ref Ref::kFaultBlockClass     { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(2<<kImmedShift)) };
 const Ref Ref::kPlainFuncClass      { (Ref::Verbatim_)(kTagImmed|kImmedSpecial|(0x03<<kImmedShift)) };

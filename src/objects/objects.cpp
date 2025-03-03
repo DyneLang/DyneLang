@@ -200,6 +200,87 @@ int dyn::Object::Print(dyn::io::PrintState &ps) const
   return 0;
 }
 
+std::string dyn::Object::ToString() const {
+  switch (t.tag_) {
+    case Tag::binary: {
+      return "[ERROR: Object.ToString: binary]";
+    }
+//      // TODO: MakeBinaryFromHex("0023bf6590")...
+//      // TODO: MakeBinaryFromARM(" mov r12, sp")...
+//      // TODO: MakeBinaryFromBC( [bc:GetVar(3), bc:PushConst(0), ...] )
+//      // TODO: binary.class_ is not necessarily an object!
+//      auto o = binary.class_.GetObject();
+//      if (o && o->SymbolCompare(&gSymObjString)==0) {
+//        fprintf(ps.out_, "\"%s\"", binary.data_); // TODO: must escape characters, is \0 always at the end?
+//      } else {
+//        //'samples, 'instructions, 'code, 'bits, 'mask, 'cbits etc.
+//        fprintf(ps.out_, "binary(");
+//        ps.expect_symbol(true);
+//        binary.class_.Print(ps);
+//        ps.expect_symbol(false);
+//        if (binary.class_.GetObject()->SymbolCompare(&gSymObjInstructions)==0) {
+//          fprintf(ps.out_, ": <%ld bytes:", size());
+//          ps.incr_depth();
+//          for (int i=0; i<size(); i++) {
+//            if ((i&7)==0) {
+//              fprintf(ps.out_, "\n");
+//              ps.tab();
+//            }
+//            fprintf(ps.out_, "0x%02x, ", (uint8_t)binary.data_[i]);
+//          }
+//          fprintf(ps.out_, "\n");
+//          ps.decr_depth();
+//          ps.tab();
+//          fprintf(ps.out_, ">)");
+//        } else {
+//          fprintf(ps.out_, ": <%ld bytes>)", size());
+//        }
+//      }
+//      break; }
+    case Tag::large_binary:
+      return "[ERROR: Object.ToString: large binary]";
+//      fprintf(ps.out_, "large_binary('");
+//      ps.expect_symbol(true);
+//      binary.class_.Print(ps);
+//      ps.expect_symbol(false);
+//      fprintf(ps.out_, ": <%ld bytes>)", size());
+//      break;
+    case Tag::array:
+      return "[ERROR: Object.ToString: array]";
+//      if (ps.more_depth()) {
+//        static_cast<const Array*>(this)->Print(ps);
+//      } else {
+//        fprintf(ps.out_, "<0x%016lx>", (uintptr_t)this);
+//      }
+//      break;
+    case Tag::frame:
+      return "[ERROR: Object.ToString: frame]";
+//      if (ps.more_depth()) {
+//        static_cast<const Frame*>(this)->Print(ps);
+//      } else {
+//        fprintf(ps.out_, "<0x%016lx>", (uintptr_t)this);
+//      }
+//      break;
+    case Tag::real:
+      return std::to_string(real.value_);
+    case Tag::symbol:
+//      TODO: we have to tell ToString if we need the prefix or not (use PrintState?)
+//      if (!ps.symbol_expected())
+//        fprintf(ps.out_, "'");
+      return std::string("'") + symbol.string_;
+    case Tag::native_ptr:
+      return "[ERROR: Object.ToString: native pointer]";
+//      fprintf(ps.out_, "<NativePtr>");
+//      break;
+    case Tag::reserved:
+      return "[ERROR: Object.ToString: reserved]";
+//      fprintf(ps.out_, "<Reserved>");
+//      break;
+  }
+  return "[ERROR: Object.ToString: unsupported]";
+}
+
+
 // Flags can be 1 (kMapSorted), 2(kMapShared), 4 (kMapProto)
 dyn::Frame::Frame()
 : SlottedObject( Frame_{ new Map(Ref(0), 1), new Ref[4], 4 }, 0)

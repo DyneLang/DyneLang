@@ -196,7 +196,7 @@ public:
   int SymbolCompare(const Object *other) const;
 
   int Print(dyn::io::PrintState &ps) const;
-
+  std::string ToString() const;
 };
 
 class BinaryObject: public Object

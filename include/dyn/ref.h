@@ -26,6 +26,7 @@
 #define DYN_REF_H
 
 #include <dyn/types.h>
+#include <string>
 
 namespace dyn {
 
@@ -76,6 +77,7 @@ public:
   constexpr Ref(Boolean i)          : r_{ (uintptr_t)(i ? 0x1a : 0x02) } {}
   constexpr Ref(const Object &obj)  : o_{ const_cast<Object*>(&obj) } { }
   constexpr Ref(Object *obj)        : o_{ obj } { }
+  static constexpr Ref NSRef(uint32_t r) { return Ref((Verbatim_)(r&2 ? r : r^1)); }
 
   // --- move new style w/information hiding here
   constexpr bool operator==(const Ref &other) const { return r_ == other.r_; }
@@ -98,6 +100,7 @@ public:
   Object *GetObject() const { return IsPtr() ? o_ : nullptr; }
 
   int Print(dyn::io::PrintState &ps) const;
+  std::string ToString() const;
 
 
   //extern  bool    IsRealPtr(Ref r);
