@@ -2,10 +2,8 @@
 func() begin
   x := 4;
   x := 4;
-  z := if a = 2 then begin
+  if a = 2 then begin
     b := 3;
-  end else begin
-    b := 4;
   end;
   x := 4;
   x := 4;

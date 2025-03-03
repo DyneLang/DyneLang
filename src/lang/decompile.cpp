@@ -421,9 +421,23 @@ int Decompiler::CheckLogicOr() {
  An 'if' statement can stand by itself as a flow control statement, or it
  can be used as an expression, similar to the C++ "?:" operator.
 
- If used as a flow control statement the footprint is:
+ If used as an 'if...then...' flow control statement the footprint is simply:
  \code
- ... to be determined...
+    expr
+    branch_if_false_fwd a
+    [statement]*
+ label a
+ \endcode
+
+ For 'if...then...else...' it is:
+ \code
+    expr
+    branch_if_false_fwd a
+    [statement]*
+    branch_fwd b
+ label a
+    [statement]*
+ label b
  \endcode
 
  If it is used as an expressions, the entire 'if...then...else...' will
@@ -446,7 +460,7 @@ int Decompiler::CheckLogicOr() {
  if called from label b.
  */
 int Decompiler::CheckIfThenElse() {
-
+  // TODO: other variants
   // handle 'if' as an expression:
   size_t si = stack.size()-1; // current stack index
   PC label_b = state.pc;
