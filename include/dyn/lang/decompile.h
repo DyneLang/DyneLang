@@ -37,6 +37,7 @@ namespace lang {
  This is the index of the bytecode within the instructions array.
  */
 using PC = size_t;
+constexpr PC kInvalidPC = (PC)-1;
 
 /**
  Enum of all available Dyne bytecodes.

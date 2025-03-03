@@ -67,9 +67,9 @@ enum class ND {
 class Node {
 public:
   ND type;
-  int arg;
-  std::string text;
-  PC pc { 0 };
+  PC pc_first, pc_last;
+  int arg { 0 };
+  std::string text { };
   int info { 0 }; // additional information field depends on Node type
   // expr 1 = push_const nil
   // expr 2 = push_const true
@@ -107,7 +107,7 @@ private:
   int DoInfixOperator(const std::string &op, int precedence);
   int DoSend(const std::string &op, const std::string &call, bool is_resend);
   int DoCallOrInvoke(const std::string &call, int which);
-  int DoArgList(std::string &args, int num_args);
+  PC DoArgList(std::string &args, int num_args);
   // handle all known bytecodes:
   int DoEOF();
   int DoPop();
@@ -248,10 +248,7 @@ int Decompiler::DoPushConst() {
   int info = 0;
   if (state.bytecode.arg ==  2) info = 1; // push_const nil
   if (state.bytecode.arg == 26) info = 2; // push_const true
-  Node nd { ND::Expr, 0, "imm_" + std::to_string(state.bytecode.arg) };
-  nd.info = info;
-  nd.pc = state.bytecode.pc;
-  stack.push_back( nd );
+  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "imm_" + std::to_string(state.bytecode.arg), info } );
   return 1;
 }
 
@@ -274,7 +271,7 @@ int Decompiler::DoInfixOperator(const std::string &op, int precedence) {
     std::cout << "ERROR: " << state.pc << ": '" << op << "': expected Expression as second argument!\n" << std::endl;
     return -1;
   }
-  stack.push_back( { ND::Expr, precedence,
+  stack.push_back( { ND::Expr, s2.pc_first, state.pc, precedence,
       (precedence < s2.arg ? "(" : "") + s2.text
     + (precedence < s2.arg ? ")" : "")
     + " " + op + " "
@@ -332,8 +329,9 @@ int Decompiler::DoReturn() {
       return -1;
     }
   }
+  PC pcf = s.pc_first;
   stack.pop_back();
-  stack.push_back( { ND::Statement, 0, "return " + s.text } );
+  stack.push_back( { ND::Statement, pcf, state.pc, 0, "return " + s.text } );
   return 1;
 }
 
@@ -349,7 +347,7 @@ int Decompiler::CheckLogicAnd() {
   if (   ((stack[n-1].type == ND::Expr) && (stack[n-1].info == 1)) // 'push_const nil'
       && ((stack[n-2].type == ND::BranchFwd) && ((PC)stack[n-2].arg == state.pc))
       && (stack[n-3].type == ND::Expr)
-      && ((stack[n-4].type == ND::BranchFalseFwd) && ((PC)stack[n-4].arg == stack[n-1].pc))
+      && ((stack[n-4].type == ND::BranchFalseFwd) && ((PC)stack[n-4].arg == stack[n-1].pc_first))
       && (stack[n-5].type == ND::Expr) )
   {
     int precedence = 11;
@@ -359,8 +357,9 @@ int Decompiler::CheckLogicAnd() {
       + " and "
       + (precedence < stack[n-3].arg ? "(" : "") + stack[n-3].text
       + (precedence < stack[n-3].arg ? ")" : "");
+    PC pcf = stack[n-5].pc_first;
     for (int i=5; i>0; --i) stack.pop_back();
-    stack.push_back( { ND::Expr, 11, text} );
+    stack.push_back( { ND::Expr, pcf, state.pc, 11, text} );
     return 1;
   } else {
     return 0;
@@ -379,7 +378,7 @@ int Decompiler::CheckLogicOr() {
   if (   ((stack[n-1].type == ND::Expr) && (stack[n-1].info == 2)) // 'push_const true'
       && ((stack[n-2].type == ND::BranchFwd) && ((PC)stack[n-2].arg == state.pc))
       && (stack[n-3].type == ND::Expr)
-      && ((stack[n-4].type == ND::BranchTrueFwd) && ((PC)stack[n-4].arg == stack[n-1].pc))
+      && ((stack[n-4].type == ND::BranchTrueFwd) && ((PC)stack[n-4].arg == stack[n-1].pc_first))
       && (stack[n-5].type == ND::Expr) )
   {
     int precedence = 11;
@@ -389,8 +388,9 @@ int Decompiler::CheckLogicOr() {
       + " or "
       + (precedence < stack[n-3].arg ? "(" : "") + stack[n-3].text
       + (precedence < stack[n-3].arg ? ")" : "");
+    PC pcf = stack[n-5].pc_first;
     for (int i=5; i>0; --i) stack.pop_back();
-    stack.push_back( { ND::Expr, 11, text} );
+    stack.push_back( { ND::Expr, pcf, state.pc, 11, text} );
     return 1;
   } else {
     return 0;
@@ -654,34 +654,27 @@ int Decompiler::DoLabel() {
 int Decompiler::DoBranch() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
-    stack.push_back( { ND::BranchFwd, state.bytecode.arg, "ND::BranchFwd"} );
+    stack.push_back( { ND::BranchFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchFwd"} );
   else
-    stack.push_back( { ND::BranchBack, state.bytecode.arg, "ND::BranchBack"} );
+    stack.push_back( { ND::BranchBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchBack"} );
   return 1;
 }
 
 int Decompiler::DoBranchIfTrue() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
-    stack.push_back( { ND::BranchTrueFwd, state.bytecode.arg, "ND::BranchTrueFwd"} );
+    stack.push_back( { ND::BranchTrueFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueFwd"} );
   else
-    // check "while ... do ... "
-    stack.push_back( { ND::BranchTrueBack, state.bytecode.arg, "ND::BranchTrueBack"} );
+    stack.push_back( { ND::BranchTrueBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueBack"} );
   return 1;
 }
 
 int Decompiler::DoBranchIfFalse() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
-    stack.push_back( { ND::BranchFalseFwd, state.bytecode.arg, "ND::BranchFalseFwd"} );
+    stack.push_back( { ND::BranchFalseFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchFalseFwd"} );
   else
-    //  State s = stack.back(); stack.pop_back();
-    //  if (s.type != ND::Expr) {
-    //    std::cout << "ERROR: " << state.ip << ": 'branch_if_false': expected Expression as first argument!\n" << std::endl;
-    //    return -1;
-    //  }
-    //  stack.push_back( { ND::Condition, 0, "if not " + s.text + " begin"} );
-    stack.push_back( { ND::BranchFalseBack, state.bytecode.arg, "ND::BranchFalseBack"} );
+    stack.push_back( { ND::BranchFalseBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchFalseBack"} );
   return 1;
 }
 
@@ -698,20 +691,25 @@ int Decompiler::DoPop() {
   return 1;
 }
 
-int Decompiler::DoArgList(std::string &args, int num_args) {
+/**
+ \return the starting PC of the top arg, or -1 if an error occurred.
+ */
+PC Decompiler::DoArgList(std::string &args, int num_args) {
+  PC ret = kInvalidPC;
   for (int i=0; i<num_args; ++i) {
     Node &arg = stack.back();
     if (arg.type != ND::Expr) {
       std::cout << "ERROR: " << state.pc << ": expected argument " << i << " expr on stack!\n" << std::endl;
-      return -1;
+      return kInvalidPC;
     }
     if (i==0)
       args = arg.text;
     else
       args = arg.text + ", " + args;
+    ret = arg.pc_first;
     stack.pop_back();
   }
-  return 1;
+  return ret;
 }
 
 int Decompiler::DoCallOrInvoke(const std::string &call, int which) {
@@ -722,12 +720,13 @@ int Decompiler::DoCallOrInvoke(const std::string &call, int which) {
   }
   stack.pop_back();
   std::string args { };
-  if (DoArgList(args, state.bytecode.arg) == -1)
+  PC first_pc = DoArgList(args, state.bytecode.arg);
+  if (first_pc == kInvalidPC)
     return -1;
   if (which == 0) // call
-    stack.push_back( { ND::Expr, 0, s.text + "(" + args + ")" } );
+    stack.push_back( { ND::Expr, first_pc, state.pc, 0, s.text + "(" + args + ")" } );
   else // invoke
-    stack.push_back( { ND::Expr, 0, "call " + s.text + " with (" + args + ")" } );
+    stack.push_back( { ND::Expr, first_pc, state.pc, 0, "call " + s.text + " with (" + args + ")" } );
   return 1;
 }
 
@@ -751,12 +750,13 @@ int Decompiler::DoSend(const std::string &op, const std::string &call, bool is_r
     stack.pop_back();
   }
   std::string args { };
-  if (DoArgList(args, state.bytecode.arg) == -1)
+  PC pcf = DoArgList(args, state.bytecode.arg);
+  if (pcf == kInvalidPC)
     return -1;
   if (is_resend)
-    stack.push_back( { ND::Expr, 0, "inherited" + op + name.text + "(" + args + ")" } );
+    stack.push_back( { ND::Expr, pcf, state.pc, 0, "inherited" + op + name.text + "(" + args + ")" } );
   else
-    stack.push_back( { ND::Expr, 0, rcvr.text + op + name.text + "(" + args + ")" } );
+    stack.push_back( { ND::Expr, pcf, state.pc, 0, rcvr.text + op + name.text + "(" + args + ")" } );
   return 1;
 }
 
@@ -766,20 +766,19 @@ int Decompiler::DoResend() { return DoSend(":", "resend", true); }
 int Decompiler::DoResendIfDefined() { return DoSend(":?", "resend_if_defined", true); }
 
 int Decompiler::DoPush() {
-  (void)state;
-  stack.push_back( { ND::Expr, 0, "lit_" + std::to_string(state.bytecode.arg)} );
+  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg)} );
   return 1;
 }
 
 int Decompiler::DoFindVar() {
   (void)state;
-  stack.push_back( { ND::Expr, 0, "lit_" + std::to_string(state.bytecode.arg)} );
+  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg)} );
   return 1;
 }
 
 int Decompiler::DoPushSelf() {
   (void)state;
-  stack.push_back( { ND::Expr, 0, "self"} );
+  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "self"} );
   return 1;
 }
 
@@ -790,13 +789,14 @@ int Decompiler::DoPushSelf() {
  \return -1 for end of func, <-1 for error, or the number of bytes consumed
  */
 int Decompiler::DoFindAndSetVar() {
-  Node value = stack.back();
-  if (value.type != ND::Expr) {
+  Node node = stack.back();
+  if (node.type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": 'find_and_set_var': expected expression on stack!\n" << std::endl;
     return -1;
   }
+  PC pcf = node.pc_first;
   stack.pop_back();
-  stack.push_back( { ND::Statement, 0, "lit_" + std::to_string(state.bytecode.arg) + " := " + value.text} );
+  stack.push_back( { ND::Statement, pcf, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg) + " := " + node.text} );
   return 1;
 }
 
@@ -911,7 +911,7 @@ Ref dyn::lang::decompile(RefArg func)
     return RefNIL;
   printf("--- expanded byte code\n");
   print_bytecode(decompiler.instructions);
-  decompiler.stack.push_back( { ND::EndOfStack, 0, "... stack bottom ..." } );
+  decompiler.stack.push_back( { ND::EndOfStack, kInvalidPC, kInvalidPC, 0, "... stack bottom ..." } );
   printf("--- decode\n");
   decompiler.decode();
   printf("--- remaining stack:\n");
