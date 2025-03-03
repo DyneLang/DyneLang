@@ -63,6 +63,8 @@ enum class ND {
 
 /**
  A node in the syntax stack.
+ TODO: we must separate analyzing from outputting the code (leave printing to the node).
+ TODO: we need more node classes, derived from this class
  */
 class Node {
 public:
@@ -199,10 +201,6 @@ const BytecodeHandler Decompiler::handler[] = {
   &Decompiler::DoHasPath, &Decompiler::DoClassOf, &Decompiler::DoNewHandler, &Decompiler::DoUnknown
 };
 
-
-
-
-
 void PrintStack(const std::vector<Node> &stack) {
   for (auto &state: stack) {
     switch (state.type) {
@@ -218,7 +216,7 @@ void PrintStack(const std::vector<Node> &stack) {
       case ND::BranchTrueBack:   std::cout << " b_true_back: "; break;
       case ND::BranchFalseFwd:   std::cout << " b_false_fwd: "; break;
       case ND::BranchFalseBack:  std::cout << "b_false_back: "; break;
-      default:                  std::cout << "         ???: "; break;
+      default:                   std::cout << "         ???: "; break;
     }
     std::cout << std::setw(4) << state.arg << ": " << state.text << std::endl;
   }
