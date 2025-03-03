@@ -68,8 +68,9 @@ enum class ND {
  */
 class Node {
 public:
-  ND type;
-  PC pc_first, pc_last;
+  ND type { ND::Unknown };
+  PC pc_first { kInvalidPC };
+  PC pc_last { kInvalidPC };
   int arg { 0 };
   std::string text { };
   int info { 0 }; // additional information field depends on Node type
@@ -77,6 +78,25 @@ public:
   // expr 2 = push_const true
   // - add a string vector option here if we have a bunch of statements that need indenting later
   // - add the original AltCode here?
+  Node() { }
+  Node(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info=0)
+  : type(a_type), pc_first(a_pc_first), pc_last(a_pc_last), arg(a_arg), text(a_text), info(a_info)
+  {
+  }
+  virtual ~Node() {
+    printf("%%%% Node Destructor\n");
+  }
+};
+
+class InfixNode : public Node
+{
+  std::string op;
+public:
+  InfixNode(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, const std::string &a_op)
+  : Node(a_type, a_pc_first, a_pc_last, a_arg, a_text), op(a_op) { }
+  virtual ~InfixNode() {
+    printf("%%%% InfixNode Destructor\n");
+  }
 };
 
 // TODO: this is now part of the class Decompiler. Define it there or remove it.
@@ -173,7 +193,7 @@ private:
   int DoUnknown() { return -2; };
 public:
   std::vector<Bytecode> instructions { };
-  std::vector<Node> stack { };
+  std::vector<std::shared_ptr<Node>> stack { };
   State state;
 public:
   static const BytecodeHandler handler[];
@@ -201,9 +221,9 @@ const BytecodeHandler Decompiler::handler[] = {
   &Decompiler::DoHasPath, &Decompiler::DoClassOf, &Decompiler::DoNewHandler, &Decompiler::DoUnknown
 };
 
-void PrintStack(const std::vector<Node> &stack) {
+void PrintStack(const std::vector<std::shared_ptr<Node>> &stack) {
   for (auto &state: stack) {
-    switch (state.type) {
+    switch (state->type) {
       case ND::EndOfStack:       std::cout << "------------: "; break;
       case ND::Unknown:          std::cout << "     unknown: "; break;
       case ND::Error:            std::cout << "       ERROR: "; break;
@@ -218,17 +238,9 @@ void PrintStack(const std::vector<Node> &stack) {
       case ND::BranchFalseBack:  std::cout << "b_false_back: "; break;
       default:                   std::cout << "         ???: "; break;
     }
-    std::cout << std::setw(4) << state.arg << ": " << state.text << std::endl;
+    std::cout << std::setw(4) << state->arg << ": " << state->text << std::endl;
   }
 }
-
-//int DoUnknown(State &state) {
-//  stack.push_back( {
-//    ND::Unknown, 0,
-//    "ERROR: Unknown altcode " + std::to_string((int)state.bytecode.bc) + ", " + std::to_string(state.bytecode.arg)
-//    + " at " + std::to_string(state.bytecode.pc) } );
-//  return 1;
-//}
 
 /**
  Handle the end of function marker.
@@ -246,7 +258,7 @@ int Decompiler::DoPushConst() {
   int info = 0;
   if (state.bytecode.arg ==  2) info = 1; // push_const nil
   if (state.bytecode.arg == 26) info = 2; // push_const true
-  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "imm_" + std::to_string(state.bytecode.arg), info } );
+  stack.push_back( std::make_shared<Node>(ND::Expr, state.pc, state.pc, 0, "imm_" + std::to_string(state.bytecode.arg), info) );
   return 1;
 }
 
@@ -258,23 +270,26 @@ int Decompiler::DoPushConst() {
  \return number of bytecodes consumed
  */
 int Decompiler::DoInfixOperator(const std::string &op, int precedence) {
-  (void)state;
-  Node s1 = stack.back(); stack.pop_back();
-  if (s1.type != ND::Expr) {
+  Node *s1 = stack[stack.size()-1].get();
+  if (s1->type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": '" << op << "': expected Expression as first argument!\n" << std::endl;
     return -1;
   }
-  Node s2 = stack.back(); stack.pop_back();
-  if (s2.type != ND::Expr) {
+  Node *s2 = stack[stack.size()-2].get();
+  if (s2->type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": '" << op << "': expected Expression as second argument!\n" << std::endl;
     return -1;
   }
-  stack.push_back( { ND::Expr, s2.pc_first, state.pc, precedence,
-      (precedence < s2.arg ? "(" : "") + s2.text
-    + (precedence < s2.arg ? ")" : "")
+  PC pcf = s2->pc_first;
+  std::string text {
+    (precedence < s2->arg ? "(" : "") + s2->text
+    + (precedence < s2->arg ? ")" : "")
     + " " + op + " "
-    + (precedence < s1.arg ? "(" : "") + s1.text
-    + (precedence < s1.arg ? ")" : "") } );
+    + (precedence < s1->arg ? "(" : "") + s1->text
+    + (precedence < s1->arg ? ")" : "") };
+  stack.pop_back();
+  stack.pop_back();
+  stack.push_back( std::make_shared<Node>( ND::Expr, pcf, state.pc, precedence, text) );
   return 1;
 }
 
@@ -307,11 +322,11 @@ int Decompiler::DoDivide() { return DoInfixOperator("/", 5); }
 
 
 int Decompiler::DoReturn() {
-  Node s = stack.back();
+  auto expr = stack.back();
   // Handle the 'return' command at the end of the function.
   if (instructions[state.pc+1].bc == BC::EndOfFile) {
     // The compiler added a 'return' even though it was not needed. Don't output anything
-    if (s.type != ND::Expr) {
+    if (expr->type != ND::Expr) {
       return 1;
     }
     // The compiler added a 'return NIL'. This is the default if there is no
@@ -322,14 +337,14 @@ int Decompiler::DoReturn() {
     }
   } else {
     // We are not at the end of the function, so check if we can generate the 'return'.
-    if (s.type != ND::Expr) {
+    if (expr->type != ND::Expr) {
       std::cout << "ERROR: " << state.pc << ": 'return': expected Expression as first argument!\n" << std::endl;
       return -1;
     }
   }
-  PC pcf = s.pc_first;
+  PC pcf = expr->pc_first;
   stack.pop_back();
-  stack.push_back( { ND::Statement, pcf, state.pc, 0, "return " + s.text } );
+  stack.push_back( std::make_shared<Node>(ND::Statement, pcf, state.pc, 0, "return " + expr->text) );
   return 1;
 }
 
@@ -342,22 +357,22 @@ int Decompiler::CheckLogicAnd() {
   if (stack.size()<6) // not really needed, but makes the code faster
     return 0;
   size_t n = stack.size();
-  if (   ((stack[n-1].type == ND::Expr) && (stack[n-1].info == 1)) // 'push_const nil'
-      && ((stack[n-2].type == ND::BranchFwd) && ((PC)stack[n-2].arg == state.pc))
-      && (stack[n-3].type == ND::Expr)
-      && ((stack[n-4].type == ND::BranchFalseFwd) && ((PC)stack[n-4].arg == stack[n-1].pc_first))
-      && (stack[n-5].type == ND::Expr) )
+  if (   ((stack[n-1]->type == ND::Expr) && (stack[n-1]->info == 1)) // 'push_const nil'
+      && ((stack[n-2]->type == ND::BranchFwd) && ((PC)stack[n-2]->arg == state.pc))
+      && (stack[n-3]->type == ND::Expr)
+      && ((stack[n-4]->type == ND::BranchFalseFwd) && ((PC)stack[n-4]->arg == stack[n-1]->pc_first))
+      && (stack[n-5]->type == ND::Expr) )
   {
     int precedence = 11;
     std::string text =
-        (precedence < stack[n-5].arg ? "(" : "") + stack[n-5].text
-      + (precedence < stack[n-5].arg ? ")" : "")
+        (precedence < stack[n-5]->arg ? "(" : "") + stack[n-5]->text
+      + (precedence < stack[n-5]->arg ? ")" : "")
       + " and "
-      + (precedence < stack[n-3].arg ? "(" : "") + stack[n-3].text
-      + (precedence < stack[n-3].arg ? ")" : "");
-    PC pcf = stack[n-5].pc_first;
+      + (precedence < stack[n-3]->arg ? "(" : "") + stack[n-3]->text
+      + (precedence < stack[n-3]->arg ? ")" : "");
+    PC pcf = stack[n-5]->pc_first;
     for (int i=5; i>0; --i) stack.pop_back();
-    stack.push_back( { ND::Expr, pcf, state.pc, 11, text} );
+    stack.push_back( std::make_shared<Node>(ND::Expr, pcf, state.pc, 11, text) );
     return 1;
   } else {
     return 0;
@@ -373,22 +388,22 @@ int Decompiler::CheckLogicOr() {
   if (stack.size()<6) // not really needed, but makes the code faster
     return 0;
   size_t n = stack.size();
-  if (   ((stack[n-1].type == ND::Expr) && (stack[n-1].info == 2)) // 'push_const true'
-      && ((stack[n-2].type == ND::BranchFwd) && ((PC)stack[n-2].arg == state.pc))
-      && (stack[n-3].type == ND::Expr)
-      && ((stack[n-4].type == ND::BranchTrueFwd) && ((PC)stack[n-4].arg == stack[n-1].pc_first))
-      && (stack[n-5].type == ND::Expr) )
+  if (   ((stack[n-1]->type == ND::Expr) && (stack[n-1]->info == 2)) // 'push_const true'
+      && ((stack[n-2]->type == ND::BranchFwd) && ((PC)stack[n-2]->arg == state.pc))
+      && (stack[n-3]->type == ND::Expr)
+      && ((stack[n-4]->type == ND::BranchTrueFwd) && ((PC)stack[n-4]->arg == stack[n-1]->pc_first))
+      && (stack[n-5]->type == ND::Expr) )
   {
     int precedence = 11;
     std::string text =
-        (precedence < stack[n-5].arg ? "(" : "") + stack[n-5].text
-      + (precedence < stack[n-5].arg ? ")" : "")
+        (precedence < stack[n-5]->arg ? "(" : "") + stack[n-5]->text
+      + (precedence < stack[n-5]->arg ? ")" : "")
       + " or "
-      + (precedence < stack[n-3].arg ? "(" : "") + stack[n-3].text
-      + (precedence < stack[n-3].arg ? ")" : "");
-    PC pcf = stack[n-5].pc_first;
+      + (precedence < stack[n-3]->arg ? "(" : "") + stack[n-3]->text
+      + (precedence < stack[n-3]->arg ? ")" : "");
+    PC pcf = stack[n-5]->pc_first;
     for (int i=5; i>0; --i) stack.pop_back();
-    stack.push_back( { ND::Expr, pcf, state.pc, 11, text} );
+    stack.push_back( std::make_shared<Node>(ND::Expr, pcf, state.pc, 11, text) );
     return 1;
   } else {
     return 0;
@@ -463,32 +478,32 @@ int Decompiler::CheckIfThenElse() {
   size_t si = stack.size()-1; // current stack index
   PC label_b = state.pc;
   // The first entry must be an expression.
-  if (stack[si].type != ND::Expr) return 0;
-  PC pcl = stack[si].pc_last;
+  if (stack[si]->type != ND::Expr) return 0;
+  PC pcl = stack[si]->pc_last;
   --si;
   // Skip zero or more statements.
-  while (stack[si].type == ND::Statement) --si;
+  while (stack[si]->type == ND::Statement) --si;
   // So this is where label a is in the bytecode array.
-  PC label_a = stack[si+1].pc_first;
+  PC label_a = stack[si+1]->pc_first;
   // The next command must be a forward jump to the current pc:
-  if ((stack[si].type != ND::BranchFwd) || ((PC)stack[si].arg != label_b)) return 0;
+  if ((stack[si]->type != ND::BranchFwd) || ((PC)stack[si]->arg != label_b)) return 0;
   --si;
   // The first half of the 'if' code must generate a value:
-  if (stack[si].type != ND::Expr) return 0;
+  if (stack[si]->type != ND::Expr) return 0;
   --si;
   // again, skip zero or more statements.
-  while (stack[si].type == ND::Statement) --si;
+  while (stack[si]->type == ND::Statement) --si;
   // The initial 'if' statement must be a conditional jump to label a:
-  if ((stack[si].type != ND::BranchFalseFwd) || ((PC)stack[si].arg != label_a)) return 0;
+  if ((stack[si]->type != ND::BranchFalseFwd) || ((PC)stack[si]->arg != label_a)) return 0;
   --si;
   // And we need an expression to feed the conditional jump
-  if (stack[si].type != ND::Expr) return 0;
-  PC pcf = stack[si].pc_first;
+  if (stack[si]->type != ND::Expr) return 0;
+  PC pcf = stack[si]->pc_first;
 
   // OK, this is an 'if...then...else...' statement. Generate the source code:
   while (stack.size() > si)
     stack.pop_back();
-  stack.push_back( { ND::Expr, pcf, pcl, 0, "if ... then ... else ...; "} );
+  stack.push_back( std::make_shared<Node>(ND::Expr, pcf, pcl, 0, "if ... then ... else ...; ") );
 
   return 1;
 }
@@ -683,27 +698,27 @@ int Decompiler::DoLabel() {
 int Decompiler::DoBranch() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
-    stack.push_back( { ND::BranchFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchFwd"} );
+    stack.push_back( std::make_shared<Node>(ND::BranchFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchFwd") );
   else
-    stack.push_back( { ND::BranchBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchBack"} );
+    stack.push_back( std::make_shared<Node>(ND::BranchBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchBack") );
   return 1;
 }
 
 int Decompiler::DoBranchIfTrue() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
-    stack.push_back( { ND::BranchTrueFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueFwd"} );
+    stack.push_back( std::make_shared<Node>(ND::BranchTrueFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueFwd") );
   else
-    stack.push_back( { ND::BranchTrueBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueBack"} );
+    stack.push_back( std::make_shared<Node>(ND::BranchTrueBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueBack") );
   return 1;
 }
 
 int Decompiler::DoBranchIfFalse() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
-    stack.push_back( { ND::BranchFalseFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchFalseFwd"} );
+    stack.push_back( std::make_shared<Node>(ND::BranchFalseFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchFalseFwd") );
   else
-    stack.push_back( { ND::BranchFalseBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchFalseBack"} );
+    stack.push_back( std::make_shared<Node>(ND::BranchFalseBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchFalseBack") );
   return 1;
 }
 
@@ -711,12 +726,12 @@ int Decompiler::DoBranchIfFalse() {
  \note check if 'pop' cancel out an expr
  */
 int Decompiler::DoPop() {
-  Node &s = stack.back();
-  if (s.type != ND::Expr) {
+  auto s = stack.back();
+  if (s->type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": 'pop': expected expression on stack!\n" << std::endl;
     return -1;
   }
-  s.type = ND::Statement;
+  s->type = ND::Statement;
   return 1;
 }
 
@@ -726,24 +741,24 @@ int Decompiler::DoPop() {
 PC Decompiler::DoArgList(std::string &args, int num_args) {
   PC ret = kInvalidPC;
   for (int i=0; i<num_args; ++i) {
-    Node &arg = stack.back();
-    if (arg.type != ND::Expr) {
+    auto arg = stack.back();
+    if (arg->type != ND::Expr) {
       std::cout << "ERROR: " << state.pc << ": expected argument " << i << " expr on stack!\n" << std::endl;
       return kInvalidPC;
     }
     if (i==0)
-      args = arg.text;
+      args = arg->text;
     else
-      args = arg.text + ", " + args;
-    ret = arg.pc_first;
+      args = arg->text + ", " + args;
+    ret = arg->pc_first;
     stack.pop_back();
   }
   return ret;
 }
 
 int Decompiler::DoCallOrInvoke(const std::string &call, int which) {
-  Node s = stack.back();
-  if (s.type != ND::Expr) {
+  auto s = stack.back();
+  if (s->type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": '" << call << "': expected function name on stack!\n" << std::endl;
     return -1;
   }
@@ -753,9 +768,9 @@ int Decompiler::DoCallOrInvoke(const std::string &call, int which) {
   if (first_pc == kInvalidPC)
     return -1;
   if (which == 0) // call
-    stack.push_back( { ND::Expr, first_pc, state.pc, 0, s.text + "(" + args + ")" } );
+    stack.push_back( std::make_shared<Node>(ND::Expr, first_pc, state.pc, 0, s->text + "(" + args + ")") );
   else // invoke
-    stack.push_back( { ND::Expr, first_pc, state.pc, 0, "call " + s.text + " with (" + args + ")" } );
+    stack.push_back( std::make_shared<Node>(ND::Expr, first_pc, state.pc, 0, "call " + s->text + " with (" + args + ")") );
   return 1;
 }
 
@@ -763,16 +778,16 @@ int Decompiler::DoCall() { return DoCallOrInvoke("call", 0); }
 int Decompiler::DoInvoke() { return DoCallOrInvoke("invoke", 1); }
 
 int Decompiler::DoSend(const std::string &op, const std::string &call, bool is_resend) {
-  Node name = stack.back();
-  if (name.type != ND::Expr) {
+  auto name = stack.back();
+  if (name->type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": '" << call << "': expected message name on stack!\n" << std::endl;
     return -1;
   }
   stack.pop_back();
-  Node rcvr { };
+  auto rcvr = std::make_shared<Node>();
   if (!is_resend) {
     rcvr = stack.back();
-    if (rcvr.type != ND::Expr) {
+    if (rcvr->type != ND::Expr) {
       std::cout << "ERROR: " << state.pc << ": '" << call << "': expected receiver on stack!\n" << std::endl;
       return -1;
     }
@@ -783,9 +798,9 @@ int Decompiler::DoSend(const std::string &op, const std::string &call, bool is_r
   if (pcf == kInvalidPC)
     return -1;
   if (is_resend)
-    stack.push_back( { ND::Expr, pcf, state.pc, 0, "inherited" + op + name.text + "(" + args + ")" } );
+    stack.push_back( std::make_shared<Node>(ND::Expr, pcf, state.pc, 0, "inherited" + op + name->text + "(" + args + ")") );
   else
-    stack.push_back( { ND::Expr, pcf, state.pc, 0, rcvr.text + op + name.text + "(" + args + ")" } );
+    stack.push_back( std::make_shared<Node>(ND::Expr, pcf, state.pc, 0, rcvr->text + op + name->text + "(" + args + ")") );
   return 1;
 }
 
@@ -795,19 +810,19 @@ int Decompiler::DoResend() { return DoSend(":", "resend", true); }
 int Decompiler::DoResendIfDefined() { return DoSend(":?", "resend_if_defined", true); }
 
 int Decompiler::DoPush() {
-  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg)} );
+  stack.push_back( std::make_shared<Node>(ND::Expr, state.pc, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg)) );
   return 1;
 }
 
 int Decompiler::DoFindVar() {
   (void)state;
-  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg)} );
+  stack.push_back( std::make_shared<Node>(ND::Expr, state.pc, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg)) );
   return 1;
 }
 
 int Decompiler::DoPushSelf() {
   (void)state;
-  stack.push_back( { ND::Expr, state.pc, state.pc, 0, "self"} );
+  stack.push_back( std::make_shared<Node>(ND::Expr, state.pc, state.pc, 0, "self") );
   return 1;
 }
 
@@ -818,14 +833,14 @@ int Decompiler::DoPushSelf() {
  \return -1 for end of func, <-1 for error, or the number of bytes consumed
  */
 int Decompiler::DoFindAndSetVar() {
-  Node node = stack.back();
-  if (node.type != ND::Expr) {
+  auto node = stack.back();
+  if (node->type != ND::Expr) {
     std::cout << "ERROR: " << state.pc << ": 'find_and_set_var': expected expression on stack!\n" << std::endl;
     return -1;
   }
-  PC pcf = node.pc_first;
+  PC pcf = node->pc_first;
   stack.pop_back();
-  stack.push_back( { ND::Statement, pcf, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg) + " := " + node.text} );
+  stack.push_back( std::make_shared<Node>(ND::Statement, pcf, state.pc, 0, "lit_" + std::to_string(state.bytecode.arg) + " := " + node->text) );
   return 1;
 }
 
@@ -940,7 +955,7 @@ Ref dyn::lang::decompile(RefArg func)
     return RefNIL;
   printf("--- expanded byte code\n");
   print_bytecode(decompiler.instructions);
-  decompiler.stack.push_back( { ND::EndOfStack, kInvalidPC, kInvalidPC, 0, "... stack bottom ..." } );
+  decompiler.stack.push_back( std::make_shared<Node>(ND::EndOfStack, kInvalidPC, kInvalidPC, 0, "... stack bottom ...") );
   printf("--- decode\n");
   decompiler.decode();
   printf("--- remaining stack:\n");
