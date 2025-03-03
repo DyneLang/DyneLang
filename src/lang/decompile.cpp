@@ -416,6 +416,20 @@ int Decompiler::CheckLogicOr() {
 //}
 
 /**
+ Test if the nodes on the stack form an 'if...then...else...' flow.
+
+ An 'if' statement can stand by itself as a flow control statement, or it
+ can be used as an expression, similar to the C++ "?:" operator.
+
+ If used as a flow control statement the footprint is:
+ \code
+ ... to be determined...
+ \endcode
+
+ If it is used as an expressions, the entire 'if...then...else...' will
+ resolve into a single value on the stack and the 'else' branch is always
+ implemented. If none was defined, the bytecode generates one that pushes 'nil'
+ onto the stack.
  \code
     expr
     branch_if_false_fwd a
@@ -427,41 +441,44 @@ int Decompiler::CheckLogicOr() {
     expr
  label b
  \endcode
- \note if..then is an expression and returns a value!
+
+ This method is called when a label is encountered, but can only be successful
+ if called from label b.
  */
 int Decompiler::CheckIfThenElse() {
-  (void)state;
-//  PC label_ // it's not the PC but the index in the stack :-/
-//  PC c = n-1;
-//  // We always create an expression last:
-//  if (stack[c].type != ND::Expr) return 0;
-//  // Skip all statements:
-//  do c--; while (stack[c].type == ND::Statement);
-//  // Now this should be a label:
-//  PC label_a = c;
-#if 0
-  size_t n = stack.size();
-  if (   ((stack[n-1].type == ND::Expr) && (stack[n-1].info == 2)) // 'push_const true'
-      && ((stack[n-2].type == ND::BranchFwd) && ((PC)stack[n-2].arg == state.pc))
-      && (stack[n-3].type == ND::Expr)
-      && ((stack[n-4].type == ND::BranchTrueFwd) && ((PC)stack[n-4].arg == stack[n-1].pc))
-      && (stack[n-5].type == ND::Expr) )
-  {
-    int precedence = 11;
-    std::string text =
-    (precedence < stack[n-5].arg ? "(" : "") + stack[n-5].text
-    + (precedence < stack[n-5].arg ? ")" : "")
-    + " or "
-    + (precedence < stack[n-3].arg ? "(" : "") + stack[n-3].text
-    + (precedence < stack[n-3].arg ? ")" : "");
-    for (int i=5; i>0; --i) stack.pop_back();
-    stack.push_back( { ND::Expr, 11, text} );
-    return 1;
-  } else {
-    return 0;
-  }
-#endif
-  return 0;
+
+  // handle 'if' as an expression:
+  size_t si = stack.size()-1; // current stack index
+  PC label_b = state.pc;
+  // The first entry must be an expression.
+  if (stack[si].type != ND::Expr) return 0;
+  PC pcl = stack[si].pc_last;
+  --si;
+  // Skip zero or more statements.
+  while (stack[si].type == ND::Statement) --si;
+  // So this is where label a is in the bytecode array.
+  PC label_a = stack[si+1].pc_first;
+  // The next command must be a forward jump to the current pc:
+  if ((stack[si].type != ND::BranchFwd) || ((PC)stack[si].arg != label_b)) return 0;
+  --si;
+  // The first half of the 'if' code must generate a value:
+  if (stack[si].type != ND::Expr) return 0;
+  --si;
+  // again, skip zero or more statements.
+  while (stack[si].type == ND::Statement) --si;
+  // The initial 'if' statement must be a conditional jump to label a:
+  if ((stack[si].type != ND::BranchFalseFwd) || ((PC)stack[si].arg != label_a)) return 0;
+  --si;
+  // And we need an expression to feed the conditional jump
+  if (stack[si].type != ND::Expr) return 0;
+  PC pcf = stack[si].pc_first;
+
+  // OK, this is an 'if...then...else...' statement. Generate the source code:
+  while (stack.size() > si)
+    stack.pop_back();
+  stack.push_back( { ND::Expr, pcf, pcl, 0, "if ... then ... else ...; "} );
+
+  return 1;
 }
 
 /**
