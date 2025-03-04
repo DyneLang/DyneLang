@@ -168,19 +168,19 @@ typedef int (Decompiler::*BytecodeHandler)();
 class Decompiler {
 private:
   // Control Flow helpers:
-  int CheckTryOnExpression();
-  int CheckForeach();
-  int CheckForLoop();
-  int CheckEndlessLoop();
-  int CheckRepeatBreakUntil();
-  int CheckRepeatUntil();
-  int CheckWhileBreakDo();
-  int CheckWhileDo();
+  int CheckTryOnExpression();           // todo
+  int CheckForeach();                   // todo
+  int CheckForLoop();                   // todo
+  int CheckEndlessLoop();               // todo
+  int CheckRepeatBreakUntil();          // todo
+  int CheckRepeatUntil();               // todo
+  int CheckWhileBreakDo();              // todo
+  int CheckWhileDo();                   // todo
+  int CheckLogicAnd();
   int CheckLogicOr();
   int CheckIfThen();
   int CheckIfThenElse();
   int CheckIfThenElseExpr();
-  int CheckLogicAnd();
   int DoLabel();
   // Bytecode helpers:
   int DoInfixOperator(const std::string &op, int precedence);
@@ -190,13 +190,13 @@ private:
   // handle all known bytecodes:
   int DoEOF();
   int DoPop();
-  int DoDup() { return -2; }
+  int DoDup() { return -2; }            // Compiler does not emit this code
   int DoReturn();
   int DoPushSelf();
-  int DoSetLexScope() { return -2; }
-  int DoIterNext() { return -2; }
-  int DoIterDone() { return -2; }
-  int DoPopHandlers() { return -2; };
+  int DoSetLexScope() { return -2; }    // when calling a function that is declared inside this function
+  int DoIterNext() { return -2; }       // 'foreach'
+  int DoIterDone() { return -2; }       // 'foreach'
+  int DoPopHandlers() { return -2; };   // end of 'try' and 'onException'
   int DoPush();
   int DoPushConst();
   int DoCall();
@@ -209,44 +209,44 @@ private:
   int DoBranchIfTrue();
   int DoBranchIfFalse();
   int DoFindVar();
-  int DoGetVar() { return -2; };
-  int DoMakeFrame() { return -2; };
-  int DoMakeArray() { return -2; };
-  int DoFillArray() { return -2; };
-  int DoGetPath() { return -2; };
-  int DoGetPathCheck() { return -2; };
-  int DoSetPath() { return -2; };
-  int DoSetPathVal() { return -2; };
-  int DoSetVar() { return -2; };
+  int DoGetVar() { return -2; };        // read from a slot
+  int DoMakeFrame() { return -2; };     // build a frame
+  int DoMakeArray() { return -2; };     // build an array
+  int DoFillArray() { return -2; };     // fill an array with values
+  int DoGetPath() { return -2; };       // access path
+  int DoGetPathCheck() { return -2; };  // access path
+  int DoSetPath() { return -2; };       // access path
+  int DoSetPathVal() { return -2; };    // access path
+  int DoSetVar() { return -2; };        // write to a slot
   int DoFindAndSetVar();
-  int DoIncrVar() { return -2; };
-  int DoBranchLoop() { return -2; };
+  int DoIncrVar() { return -2; };       // 'for' loops
+  int DoBranchLoop() { return -2; };    // 'for' loops
   int DoAdd();
   int DoSubtract();
-  int DoARef() { return -2; };
-  int DoSetARef() { return -2; };
+  int DoARef() { return -2; };          // array read access
+  int DoSetARef() { return -2; };       // array write access
   int DoEquals();
-  int DoNot() { return -2; };
+  int DoNot() { return -2; };           // unary operator
   int DoNotEquals();
   int DoMultiply();
   int DoDivide();
-  int DoDiv() { return -2; };
+  int DoDiv() { return -2; };           // binary operator 'div'
   int DoLessThan();
   int DoGreaterThan();
   int DoGreaterOrEqual();
   int DoLessOrEqual();
-  int DoBitAnd() { return -2; };
-  int DoBitOr() { return -2; };
-  int DoBitNot() { return -2; };
-  int DoNewIter() { return -2; };
-  int DoLength() { return -2; };
-  int DoClone() { return -2; };
-  int DoSetClass() { return -2; };
-  int DoAddArraySlot() { return -2; };
-  int DoStringer() { return -2; };
-  int DoHasPath() { return -2; };
-  int DoClassOf() { return -2; };
-  int DoNewHandler() { return -2; };
+  int DoBitAnd() { return -2; };        // global function call 'bAnd(ref, ref)'
+  int DoBitOr() { return -2; };         // global function call 'bOr(ref, ref)'
+  int DoBitNot() { return -2; };        // global function call 'bNot(ref)'
+  int DoNewIter() { return -2; };       // 'foreach'
+  int DoLength() { return -2; };        // global function call 'length(ref)', probably 'foreach'
+  int DoClone() { return -2; };         // global function call 'clone(ref)'
+  int DoSetClass() { return -2; };      // global function call 'SetClass(obj, symbol)'
+  int DoAddArraySlot() { return -2; };  // global function call 'AddArraySlot(array, value)'
+  int DoStringer() { return -2; };      // binary operators '&' and '&&'
+  int DoHasPath() { return -2; };       // access path
+  int DoClassOf() { return -2; };       // global function call 'ClassOf(obj)'
+  int DoNewHandler() { return -2; };    // exception handling start: 'try'
   int DoUnknown() { return -2; };
 public:
   std::vector<Bytecode> instructions { };
