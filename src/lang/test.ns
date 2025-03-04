@@ -2,10 +2,9 @@
 func() begin
   x := 'notebook;
   x := 3 and 100000 or nil;
-  z := if a = 2 then begin
+  if a = 2 then begin
+    b := 2;
     b := 3;
-  end else begin
-    b := 4;
   end;
   x := 4;
   x := 4;

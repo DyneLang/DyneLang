@@ -96,6 +96,43 @@ public:
   std::string ToString() override { return imm.ToString(); }
 };
 
+class NodeIfThenElse : public Node {
+  std::shared_ptr<Node> condition_ { };
+  std::vector<std::shared_ptr<Node>> statements_a_ { };
+  std::vector<std::shared_ptr<Node>> statements_b_ { };
+public:
+  NodeIfThenElse(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info=0)
+  : Node(a_type, a_pc_first, a_pc_last, a_arg, a_text, a_info) { }
+  void set_condition(std::shared_ptr<Node> condition) { condition_ = condition; }
+  void add_statement_a(std::shared_ptr<Node> stmt) { statements_a_.push_back(stmt); }
+  void add_statement_b(std::shared_ptr<Node> stmt) { statements_b_.push_back(stmt); }
+  std::string ToString() override {
+    // Write the expression
+    std::string out = "if " + condition_->ToString() + " then";
+    bool add_begin_end = (statements_a_.size()>1) || (statements_b_.size()>1);
+    // Write the statements in block a
+    std::string stat_a { };
+    if (add_begin_end) stat_a += " begin";
+    stat_a += "\n";
+    for (size_t i=0; i<statements_a_.size(); ++i)
+      stat_a += "  " + statements_a_[i]->ToString() + ";\n";
+    if (add_begin_end) stat_a += "end ";
+    // Write the statements in block b
+    if (statements_b_.empty()) {
+      return out + stat_a;
+    } else {
+      std::string stat_b { };
+      if (add_begin_end) stat_b += " begin";
+      stat_b += "\n";
+      for (size_t i=0; i<statements_b_.size(); ++i)
+        stat_b += "  " + statements_b_[i]->ToString() + ";\n";
+      if (add_begin_end) stat_b += "end ";
+      // Write and if...then...else... statement
+      return out + stat_a + "else" + stat_b;
+    }
+  }
+};
+
 void PrintStack(const std::vector<std::shared_ptr<Node>> &stack) {
   for (auto &node: stack) {
     switch (node->type) {
@@ -140,7 +177,9 @@ private:
   int CheckWhileBreakDo();
   int CheckWhileDo();
   int CheckLogicOr();
+  int CheckIfThen();
   int CheckIfThenElse();
+  int CheckIfThenElseExpr();
   int CheckLogicAnd();
   int DoLabel();
   // Bytecode helpers:
@@ -412,47 +451,122 @@ int Decompiler::CheckLogicOr() {
 }
 
 /**
+ Test if the nodes on the stack form an 'if...then...' flow statement.
+
+ An 'if...then...' flow control statement has the footprint:
  \code
     expr
     branch_if_false_fwd a
     [statement]*
-    expr
-    branch_fwd b
  label a
-    push_const nil
- label b
  \endcode
- \note if..then is an expression and returns a value!
+
+ This method is called when a label is encountered.
  */
-//int CheckIfThen(State &state) {
-//  (void)state;
-//  return 0;
-//}
+int Decompiler::CheckIfThen()
+{
+  // -- Check if this is an 'if...then...' statement:
+  size_t si = stack.size()-1; // current stack index
+  PC label_a = state.pc;
+  // The first entry must be a statement.
+  if (stack[si]->type != ND::Statement) return 0;
+  PC pcl = stack[si]->pc_last;
+  PC stat_first = si;
+  --si;
+  // Skip zero or more statements.
+  while (stack[si]->type == ND::Statement) --si;
+  // So this is where label a is in the bytecode array.
+  PC stat_last = si+1;
+  // The initial 'if' statement must be a conditional jump to label a:
+  if ((stack[si]->type != ND::BranchFalseFwd) || ((PC)stack[si]->arg != label_a)) return 0;
+  --si;
+  // And we need an expression to feed the conditional jump
+  if (stack[si]->type != ND::Expr) return 0;
+  PC condition_pc = si;
+  PC pcf = stack[si]->pc_first;
+
+  // -- Create a node on the stack, using all the information from above:
+  auto node = std::make_shared<NodeIfThenElse>(ND::Statement, pcf, pcl, 0, "if ... then ...; ");
+  node->set_condition(stack[condition_pc]);
+  for (PC i=stat_last; i<=stat_first; ++i)
+    node->add_statement_a(stack[i]);
+  // Replace nodes on the stack that make up the new if...then...else... node
+  while (stack.size()>condition_pc) stack.pop_back();
+  stack.push_back(node);
+  return 1;
+}
 
 /**
- Test if the nodes on the stack form an 'if...then...else...' flow.
+ Test if the nodes on the stack form an 'if...then...else...' flow statement.
+
+ An 'if...then...else...' flow control statement has the footprint:
+ \code
+    expr
+    branch_if_false_fwd a
+    [statement]*
+    branch_fwd b
+ label a
+    [statement]*
+ label b
+ \endcode
+
+ This method is called when a label is encountered, but can only be successful
+ if called from label b.
+
+ \note CheckIfThenElse and CheckIfThenElseExpr are very similar. Try to bake
+    this into a single method.
+ */
+int Decompiler::CheckIfThenElse()
+{
+  // -- Check if this is an 'if...then...else...' statement:
+  size_t si = stack.size()-1; // current stack index
+  PC label_b = state.pc;
+  // The first entry must be a statement.
+  if (stack[si]->type != ND::Statement) return 0;
+  PC pcl = stack[si]->pc_last;
+  PC stat_b_first = si;
+  --si;
+  // Skip zero or more statements.
+  while (stack[si]->type == ND::Statement) --si;
+  // So this is where label a is in the bytecode array.
+  PC label_a = stack[si+1]->pc_first;
+  PC stat_b_last = si+1;
+  // The next command must be a forward jump to the current pc:
+  if ((stack[si]->type != ND::BranchFwd) || ((PC)stack[si]->arg != label_b)) return 0;
+  --si;
+  // The first half of the 'if' code must again be a statement:
+  if (stack[si]->type != ND::Statement) return 0;
+  PC stat_a_first = si;
+  --si;
+  // again, skip zero or more statements.
+  while (stack[si]->type == ND::Statement) --si;
+  PC stat_a_last = si+1;
+  // The initial 'if' statement must be a conditional jump to label a:
+  if ((stack[si]->type != ND::BranchFalseFwd) || ((PC)stack[si]->arg != label_a)) return 0;
+  --si;
+  // And we need an expression to feed the conditional jump
+  if (stack[si]->type != ND::Expr) return 0;
+  PC condition_pc = si;
+  PC pcf = stack[si]->pc_first;
+
+  // -- Create a node on the stack, using all the information from above:
+  auto node = std::make_shared<NodeIfThenElse>(ND::Statement, pcf, pcl, 0, "if ... then ... else ...; ");
+  node->set_condition(stack[condition_pc]);
+  for (PC i=stat_a_last; i<=stat_a_first; ++i)
+    node->add_statement_a(stack[i]);
+  for (PC i=stat_b_last; i<=stat_b_first; ++i)
+    node->add_statement_b(stack[i]);
+  // Replace nodes on the stack that make up the new if...then...else... node
+  while (stack.size()>condition_pc) stack.pop_back();
+  stack.push_back(node);
+  return 1;
+}
+
+/**
+ Test if the nodes on the stack form an 'if...then...else...' flow and return a value.
 
  An 'if' statement can stand by itself as a flow control statement, or it
  can be used as an expression, similar to the C++ "?:" operator.
-
- If used as an 'if...then...' flow control statement the footprint is simply:
- \code
-    expr
-    branch_if_false_fwd a
-    [statement]*
- label a
- \endcode
-
- For 'if...then...else...' it is:
- \code
-    expr
-    branch_if_false_fwd a
-    [statement]*
-    branch_fwd b
- label a
-    [statement]*
- label b
- \endcode
 
  If it is used as an expressions, the entire 'if...then...else...' will
  resolve into a single value on the stack and the 'else' branch is always
@@ -473,41 +587,51 @@ int Decompiler::CheckLogicOr() {
  This method is called when a label is encountered, but can only be successful
  if called from label b.
  */
-int Decompiler::CheckIfThenElse() {
-  // TODO: other variants
-  // handle 'if' as an expression:
+int Decompiler::CheckIfThenElseExpr()
+{
+  // -- Check if this is an 'if...then...else...expr':
   size_t si = stack.size()-1; // current stack index
   PC label_b = state.pc;
   // The first entry must be an expression.
   if (stack[si]->type != ND::Expr) return 0;
   PC pcl = stack[si]->pc_last;
+  PC stat_b_first = si;
   --si;
   // Skip zero or more statements.
   while (stack[si]->type == ND::Statement) --si;
   // So this is where label a is in the bytecode array.
   PC label_a = stack[si+1]->pc_first;
+  PC stat_b_last = si+1;
   // The next command must be a forward jump to the current pc:
   if ((stack[si]->type != ND::BranchFwd) || ((PC)stack[si]->arg != label_b)) return 0;
   --si;
   // The first half of the 'if' code must generate a value:
   if (stack[si]->type != ND::Expr) return 0;
+  PC stat_a_first = si;
   --si;
   // again, skip zero or more statements.
   while (stack[si]->type == ND::Statement) --si;
+  PC stat_a_last = si+1;
   // The initial 'if' statement must be a conditional jump to label a:
   if ((stack[si]->type != ND::BranchFalseFwd) || ((PC)stack[si]->arg != label_a)) return 0;
   --si;
   // And we need an expression to feed the conditional jump
   if (stack[si]->type != ND::Expr) return 0;
+  PC condition_pc = si;
   PC pcf = stack[si]->pc_first;
 
-  return 0;
-
-  // OK, this is an 'if...then...else...' statement. Generate the source code:
-  while (stack.size() > si)
-    stack.pop_back();
-  stack.push_back( std::make_shared<Node>(ND::Expr, pcf, pcl, 0, "if ... then ... else ...; ") );
-
+  // -- Create a node on the stack, using all the information from above:
+  auto node = std::make_shared<NodeIfThenElse>(ND::Expr, pcf, pcl, 0, "if ... then ... else ...; ");
+  node->set_condition(stack[condition_pc]);
+  for (PC i=stat_a_last; i<=stat_a_first; ++i)
+    node->add_statement_a(stack[i]);
+  // TODO: the last statement and the expr in the block may correlate, e.g.: "lit_4:=4; lit_4;"
+  // TODO: the second statement here should not appear in the source code!
+  for (PC i=stat_b_last; i<=stat_b_first; ++i)
+    node->add_statement_b(stack[i]);
+  // Replace nodes on the stack that make up the new if...then...else... node
+  while (stack.size()>condition_pc) stack.pop_back();
+  stack.push_back(node);
   return 1;
 }
 
@@ -682,9 +806,10 @@ int Decompiler::DoLabel() {
   for (;;) {
     if (CheckLogicAnd() == 1) continue;
     if (CheckLogicOr() == 1) continue;
+    if (CheckIfThenElseExpr() == 1) continue;
     if (CheckIfThenElse() == 1) continue;
+    if (CheckIfThen() == 1) continue;
     // check "while ... break ... do ... "
-    // check "if ... then" and "if ... then ... else"
     break;
   }
   //  if ... then ...
@@ -698,6 +823,18 @@ int Decompiler::DoLabel() {
   return 1;
 }
 
+/**
+ Handle a `branch` bytecode instruction.
+
+ A branch changes the the program counter to a new address. Branches can jump
+ forward or back. Unconditional branches are always used in combination with
+ conditional branches or within exception handling. A forward branch is used
+ in 'try', 'onException', 'else', 'repeat', and 'break'. They are always
+ followed by a label, so we just mark them with a node on the stack.
+
+ A backward branch is created by the 'loop' statement. The loop itself will
+ have one or more 'break' statements.
+ */
 int Decompiler::DoBranch() {
   (void)state;
   if ((PC)state.bytecode.arg > state.pc)
