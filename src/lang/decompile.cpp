@@ -96,19 +96,24 @@ public:
   std::string ToString() override { return imm.ToString(); }
 };
 
-class NodeIfThenElse : public Node {
+class NodeControlFlow : public Node {
   std::shared_ptr<Node> condition_ { };
   std::vector<std::shared_ptr<Node>> statements_a_ { };
   std::vector<std::shared_ptr<Node>> statements_b_ { };
 public:
-  NodeIfThenElse(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info=0)
+  NodeControlFlow(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info)
   : Node(a_type, a_pc_first, a_pc_last, a_arg, a_text, a_info) { }
   void set_condition(std::shared_ptr<Node> condition) { condition_ = condition; }
   void add_statement_a(std::shared_ptr<Node> stmt) { statements_a_.push_back(stmt); }
   void add_statement_b(std::shared_ptr<Node> stmt) { statements_b_.push_back(stmt); }
   std::string ToString() override {
     // Write the expression
-    std::string out = "if " + condition_->ToString() + " then";
+    std::string out { };
+    switch (info) {
+      case 0: out = "if " + condition_->ToString() + " then"; break;
+      case 1: out = "while " + condition_->ToString() + " do"; break;
+      case 2: out = "repeat"; break; // TODO: not yet implemented
+    }
     bool add_begin_end = (statements_a_.size()>1) || (statements_b_.size()>1);
     // Write the statements in block a
     std::string stat_a { };
@@ -175,7 +180,7 @@ private:
   int CheckRepeatBreakUntil();          // todo
   int CheckRepeatUntil();               // todo
   int CheckWhileBreakDo();              // todo
-  int CheckWhileDo();                   // todo
+  int CheckWhileDo();                   // <active>
   int CheckLogicAnd();
   int CheckLogicOr();
   int CheckIfThen();
@@ -486,7 +491,7 @@ int Decompiler::CheckIfThen()
   PC pcf = stack[si]->pc_first;
 
   // -- Create a node on the stack, using all the information from above:
-  auto node = std::make_shared<NodeIfThenElse>(ND::Statement, pcf, pcl, 0, "if ... then ...; ");
+  auto node = std::make_shared<NodeControlFlow>(ND::Statement, pcf, pcl, 0, "if ... then ...; ", 0);
   node->set_condition(stack[condition_pc]);
   for (PC i=stat_last; i<=stat_first; ++i)
     node->add_statement_a(stack[i]);
@@ -550,7 +555,7 @@ int Decompiler::CheckIfThenElse()
   PC pcf = stack[si]->pc_first;
 
   // -- Create a node on the stack, using all the information from above:
-  auto node = std::make_shared<NodeIfThenElse>(ND::Statement, pcf, pcl, 0, "if ... then ... else ...; ");
+  auto node = std::make_shared<NodeControlFlow>(ND::Statement, pcf, pcl, 0, "if ... then ... else ...; ", 0);
   node->set_condition(stack[condition_pc]);
   for (PC i=stat_a_last; i<=stat_a_first; ++i)
     node->add_statement_a(stack[i]);
@@ -621,7 +626,7 @@ int Decompiler::CheckIfThenElseExpr()
   PC pcf = stack[si]->pc_first;
 
   // -- Create a node on the stack, using all the information from above:
-  auto node = std::make_shared<NodeIfThenElse>(ND::Expr, pcf, pcl, 0, "if ... then ... else ...; ");
+  auto node = std::make_shared<NodeControlFlow>(ND::Expr, pcf, pcl, 0, "if ... then ... else ...; ", 0);
   node->set_condition(stack[condition_pc]);
   for (PC i=stat_a_last; i<=stat_a_first; ++i)
     node->add_statement_a(stack[i]);
@@ -648,8 +653,38 @@ int Decompiler::CheckIfThenElseExpr()
  \note The code changes substantially if there is a 'break' statement
  */
 int Decompiler::CheckWhileDo() {
-  (void)state;
-  return 0;
+  // This is called with branch_true_back pending before added to the stack
+  size_t si = stack.size()-1; // current stack index
+  // The first entry must be an expression.
+  if (stack[si]->type != ND::Expr) return 0;
+  PC condition_pc = si;
+  PC label_a = stack[si]->pc_first;
+  --si;
+  // Check for one expression
+  // TODO: example code has nonsensical "find_var;pop;" here.
+  if (stack[si]->type != ND::Statement) return 0;
+  PC stat_first = si;
+  --si;
+  // Check for more expressions
+  while (stack[si]->type == ND::Statement) --si;
+  PC stat_last = si+1;
+  // Now check if our current branch_true_back jumps to label b
+  PC label_b = stack[si+1]->pc_first;
+  if ((PC)instructions[state.pc].arg != label_b) return 0;
+  // Finally, check for the branch forward to label a:
+  if (stack[si]->type != ND::BranchFwd) return 0;
+  if ((PC)stack[si]->arg != label_a) return 0;
+  PC crop_pc = si;
+  PC pcf = stack[si]->pc_first;
+
+  // -- Create a node on the stack, using all the information from above:
+  auto node = std::make_shared<NodeControlFlow>(ND::Statement, pcf, state.pc+1, 0, "while ... do ...; ", 1);
+  node->set_condition(stack[condition_pc]);
+  for (PC i=stat_last; i<=stat_first; ++i)
+    node->add_statement_a(stack[i]);
+  while (stack.size()>crop_pc) stack.pop_back();
+  stack.push_back(node);
+  return 1;
 }
 
 /**
@@ -803,14 +838,18 @@ int Decompiler::CheckTryOnExpression() {
 
 int Decompiler::DoLabel() {
   // Repeat finding actions related to this label until all found.
+  int ret = 0;
   for (;;) {
-    if (CheckLogicAnd() == 1) continue;
-    if (CheckLogicOr() == 1) continue;
-    if (CheckIfThenElseExpr() == 1) continue;
-    if (CheckIfThenElse() == 1) continue;
-    if (CheckIfThen() == 1) continue;
+    if (CheckLogicAnd() == 1) { ret = 1; continue; }
+    if (CheckLogicOr() == 1) { ret = 1; continue; }
+    if (CheckIfThenElseExpr() == 1) { ret = 1; continue; }
+    if (CheckIfThenElse() == 1) { ret = 1; continue; }
+    if (CheckIfThen() == 1) { ret = 1; continue; }
     // check "while ... break ... do ... "
     break;
+  }
+  if (ret == 0) {
+    std::cout << "WARNING: Can't find use of label at " << state.pc << ".\n";
   }
   //  if ... then ...
   //  if ... then ... else ...
@@ -820,7 +859,7 @@ int Decompiler::DoLabel() {
   //  for counter := initialValue to finalValue [by incrValue] do expression
   //  foreach [slot,] value [deeply] in {frame | array} {collect | do} expression
   //  try [begin] expression[s] [onException symbol do statement]* [end]
-  return 1;
+  return ret;
 }
 
 /**
@@ -845,12 +884,20 @@ int Decompiler::DoBranch() {
 }
 
 int Decompiler::DoBranchIfTrue() {
-  (void)state;
-  if ((PC)state.bytecode.arg > state.pc)
+  int ret = 0;
+  if ((PC)state.bytecode.arg > state.pc) {
     stack.push_back( std::make_shared<Node>(ND::BranchTrueFwd, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueFwd") );
-  else
-    stack.push_back( std::make_shared<Node>(ND::BranchTrueBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueBack") );
-  return 1;
+    ret = 1;
+  } else {
+    for (;;) {
+      if (CheckWhileDo() == 1) { ret = 1; continue; }
+      break;
+    }
+    if (ret == 0) {
+      stack.push_back( std::make_shared<Node>(ND::BranchTrueBack, state.pc, state.pc, state.bytecode.arg, "ND::BranchTrueBack") );
+    }
+  }
+  return ret;
 }
 
 int Decompiler::DoBranchIfFalse() {

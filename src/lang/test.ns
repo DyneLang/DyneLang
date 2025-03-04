@@ -1,11 +1,8 @@
 
 func() begin
-  x := 'notebook;
-  x := 3 and 100000 or nil;
-  if a = 2 then begin
-    b := 2;
-    b := 3;
-  end;
-  x := 4;
-  x := 4;
+  a := 0;
+  while a < 3 do begin
+    b := a + 2;
+    b := b + 3;
+  end
 end
