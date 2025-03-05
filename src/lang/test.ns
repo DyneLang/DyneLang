@@ -1,8 +1,18 @@
 
 func() begin
+/*
+  try 
+    a:=3;
+    a:=4;
+  onexception |ex.test| do
+    c:=4;
+  onexception |ex.test| do
+    c:=5;
+*/
   a := 0;
-  while a < 3 do begin
+  x := while a < 3 do begin
     b := a + 2;
+    if 1=2 then begin x:=4; break 4 end;
     b := b + 3;
   end
 end

@@ -63,8 +63,6 @@ enum class ND {
 
 /**
  A node in the syntax stack.
- TODO: we must separate analyzing from outputting the code (leave printing to the node).
- TODO: we need more node classes, derived from this class
  */
 class Node {
 public:
@@ -180,7 +178,7 @@ private:
   int CheckRepeatBreakUntil();          // todo
   int CheckRepeatUntil();               // todo
   int CheckWhileBreakDo();              // todo
-  int CheckWhileDo();                   // <active>
+  int CheckWhileDo();
   int CheckLogicAnd();
   int CheckLogicOr();
   int CheckIfThen();
@@ -651,6 +649,9 @@ int Decompiler::CheckIfThenElseExpr()
     push_const nil  <--- note: `while-do` is an expr!
  \endcode
  \note The code changes substantially if there is a 'break' statement
+ TODO: Like with 'if', the code generated differs if the result of the 'while' loop is used.
+ 'while' pushes 'NIL' on the stack if it is used as an expression. If 'break'
+ is called, the argument to 'break' is pushed.
  */
 int Decompiler::CheckWhileDo() {
   // This is called with branch_true_back pending before added to the stack
@@ -847,9 +848,6 @@ int Decompiler::DoLabel() {
     if (CheckIfThen() == 1) { ret = 1; continue; }
     // check "while ... break ... do ... "
     break;
-  }
-  if (ret == 0) {
-    std::cout << "WARNING: Can't find use of label at " << state.pc << ".\n";
   }
   //  if ... then ...
   //  if ... then ... else ...
@@ -1146,6 +1144,7 @@ Decompiler::Decompiler(RefArg func)
 
 Ref dyn::lang::decompile(RefArg func)
 {
+  if (!IsFrame(func)) return RefNIL;
   Decompiler decompiler(func);
   decompiler.instructions = transcode_from_ns(func);
   if (decompiler.instructions.empty())

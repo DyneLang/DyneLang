@@ -25,11 +25,13 @@
 list(APPEND dynec_srcs
     src/lang/decompile.cpp
     src/lang/transcode.cpp
+    src/lang/ast.cpp
 )
 
 list(APPEND dynec_hdrs
     include/dyn/lang/decompile.h
     src/lang/transcode.h
+    src/lang/ast.h
 )
 
 list(APPEND dynec_cmake
