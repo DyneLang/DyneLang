@@ -24,60 +24,61 @@
 
 #ifndef DYN_LANG_AST_H
 #define DYN_LANG_AST_H
- 
+
+#include <dyn/lang/decompile.h>
 #include <dyn/ref.h>
- 
+
 namespace dyn {
- 
+
 namespace lang {
- 
+
 enum class ND {
-        EndOfStack, Unknown, Error, Expr, Statement, Condition,
-        BranchFwd, BranchBack, BranchTrueFwd, BranchTrueBack,
-        BranchFalseFwd, BranchFalseBack
-      };
-      
-      class Node {
-      public:
-        ND type { ND::Unknown };
-        PC pc_first { kInvalidPC };
-        PC pc_last { kInvalidPC };
-        int arg { 0 };
-        std::string text { };
-        int info { 0 };
-        Node() { }
-        Node(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info=0);
-        virtual ~Node();
-        virtual std::string ToString();
-      };
-      
-      class NodeImmediate : public Node {
-        dyn::Ref imm { RefNIL };
-      public:
-        NodeImmediate(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info, RefArg a_ref);
-        std::string ToString() override;
-      };
-      
-      class NodeControlFlow : public Node {
-        std::shared_ptr<Node> condition_ { };
-        std::vector<std::shared_ptr<Node>> statements_a_ { };
-        std::vector<std::shared_ptr<Node>> statements_b_ { };
-      public:
-        NodeControlFlow(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info);
-        void set_condition(std::shared_ptr<Node> condition);
-        void add_statement_a(std::shared_ptr<Node> stmt);
-        void add_statement_b(std::shared_ptr<Node> stmt);
-        std::string ToString() override;
-      };
-      
-      void PrintStack(const std::vector<std::shared_ptr<Node>> &stack);
-       
+  EndOfStack, Unknown, Error, Expr, Statement, Condition,
+  BranchFwd, BranchBack, BranchTrueFwd, BranchTrueBack,
+  BranchFalseFwd, BranchFalseBack
+};
+
+class Node {
+public:
+  ND type { ND::Unknown };
+  PC pc_first { kInvalidPC };
+  PC pc_last { kInvalidPC };
+  int arg { 0 };
+  std::string text { };
+  int info { 0 };
+  Node() { }
+  Node(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info=0);
+  virtual ~Node();
+  virtual std::string ToString();
+};
+
+class NodeImmediate : public Node {
+  dyn::Ref imm { RefNIL };
+public:
+  NodeImmediate(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info, RefArg a_ref);
+  std::string ToString() override;
+};
+
+class NodeControlFlow : public Node {
+  std::shared_ptr<Node> condition_ { };
+  std::vector<std::shared_ptr<Node>> statements_a_ { };
+  std::vector<std::shared_ptr<Node>> statements_b_ { };
+public:
+  NodeControlFlow(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info);
+  void set_condition(std::shared_ptr<Node> condition);
+  void add_statement_a(std::shared_ptr<Node> stmt);
+  void add_statement_b(std::shared_ptr<Node> stmt);
+  std::string ToString() override;
+};
+
+void PrintStack(const std::vector<std::shared_ptr<Node>> &stack);
+
 } // namespce lang
- 
+
 } // namespace dn
- 
+
 #endif // DYN_LANG_AST_H
- 
- 
- 
- 
+
+
+
+
