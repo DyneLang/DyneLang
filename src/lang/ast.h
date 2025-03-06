@@ -30,6 +30,10 @@
 
 namespace dyn {
 
+namespace io {
+  class PrintState;
+}
+
 namespace lang {
 
 enum class ND {
@@ -50,6 +54,7 @@ public:
   Node(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info=0);
   virtual ~Node();
   virtual std::string ToString();
+  virtual int print(dyn::io::PrintState &ps);
 };
 
 class NodeImmediate : public Node {

@@ -26,6 +26,7 @@
 
 #include "ast.h"
 #include <dyn/objects.h>
+#include <dyn/io/print.h>
 
 #include <stdio.h>
 #include <vector>
@@ -51,6 +52,13 @@ dyn::lang::Node::~Node()
 std::string dyn::lang::Node::ToString() {
   return text;
 }
+
+int dyn::lang::Node::print(dyn::io::PrintState &ps)
+{
+  fprintf(ps.out_, "%s", ToString().c_str());
+  return 0;
+}
+
 
 dyn::lang::NodeImmediate::NodeImmediate(ND a_type, PC a_pc_first, PC a_pc_last, int a_arg, const std::string &a_text, int a_info, RefArg a_ref)
 : Node(a_type, a_pc_first, a_pc_last, a_arg, a_text, a_info), imm(a_ref)
@@ -135,3 +143,38 @@ void dyn::lang::PrintStack(const std::vector<std::shared_ptr<Node>> &stack) {
   }
 }
 
+/*
+ if         if          while       while       repeat      repeat      loop        for
+ then       then        do          break       until       break       break       to
+            else                    do                      until                   by
+                                                                                    do
+
+ expr       expr        b_fwd a     b_fwd a     a:          a:          a:          set_l 1
+ b_f_fwd a  b_f_fwd a   b:          b:          stmts       stmts       stmts       set_l 2
+ stmts      stmts       stmts       stmts       expr        expr        expr        set_l 3
+ a:         b_fwd b     a:          expr        b_f_bck a   b_fwd b     b_fwd b     b_fwd a
+            a:          expr        b_fwd c                 stmts       stmts       b:
+            stmts       b_t_bck b   a:                      expr        b_back a    stmts
+            b:                      expr                    b_f_bck a   b:          get_l
+                                    b_t_bck b               expr                    incr_l
+                                    expr                    b:                      a:
+                                    c:                                              get_l
+                                    b:                                              b_loop b
+
+    expr
+    set_var local_4
+    expr
+    set_var local_5
+    get_var local_5
+    get_var local_3
+    branch_fwd a
+ label b
+    [statment]*
+    get_var local_5
+    incr_var loc_3
+ label a
+    get_var local_4
+    branch_loop b
+
+
+*/
