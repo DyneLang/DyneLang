@@ -184,8 +184,7 @@ std::vector<Bytecode> dyn::lang::transcode_from_ns(dyn::RefArg ns_func)
       case 20: bc.bc = BC::SetVar; bc.arg = (int16_t)b; break;
       case 21: bc.bc = BC::FindAndSetVar; bc.arg = (int16_t)b; break;
       case 22: bc.bc = BC::IncrVar; bc.arg = (int16_t)b; break;
-      case 23: bc.bc = BC::BranchLoop; bc.arg = b; break;
-        // TODO: BranchLoop pushes jump destinations onto the stack
+      case 23: bc.bc = BC::BranchLoop; bc.arg = (int)pc_map[b]; func[bc.arg].references++; break;
       case 24:
         switch (b) {
           case 0: bc.bc = BC::Add; break;
@@ -218,7 +217,17 @@ std::vector<Bytecode> dyn::lang::transcode_from_ns(dyn::RefArg ns_func)
             break;
         }
         break;
-      case 25: bc.bc = BC::NewHandler; bc.arg = (int16_t)b; break;
+      case 25: bc.bc = BC::NewHandler; bc.arg = (int16_t)b;
+        for (int i=0; i<b; i++) {
+          auto &exc_pc_bc = func[pc-2*i-1];
+          if ((exc_pc_bc.bc == BC::PushConst) && ((exc_pc_bc.arg&3)==0)) {
+            int exc_pc = exc_pc_bc.arg >> 2;
+            func[pc_map[exc_pc]].references++;
+          } else {
+            std::cout << "ERROR: Transcoding new_handler at "<<pc<<": unexpected bytecodes.\n";
+          }
+        }
+        break;
       default:
         std::cout << "WARNING: unknown byte code a:" << (int)a << ", b:" << (int)b << ", ip:" << (int)ip << "." << std::endl;
         break;

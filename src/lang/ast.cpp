@@ -144,37 +144,22 @@ void dyn::lang::PrintStack(const std::vector<std::shared_ptr<Node>> &stack) {
 }
 
 /*
- if         if          while       while       repeat      repeat      loop        for
- then       then        do          break       until       break       break       to
-            else                    do                      until                   by
+ if         if          while       while       repeat      repeat      loop        for       foreach     try
+ then       then        do          break       until       break       break       to        in          onexception
+            else                    do                      until                   by        do          onexception
                                                                                     do
 
- expr       expr        b_fwd a     b_fwd a     a:          a:          a:          set_l 1
- b_f_fwd a  b_f_fwd a   b:          b:          stmts       stmts       stmts       set_l 2
- stmts      stmts       stmts       stmts       expr        expr        expr        set_l 3
- a:         b_fwd b     a:          expr        b_f_bck a   b_fwd b     b_fwd b     b_fwd a
-            a:          expr        b_fwd c                 stmts       stmts       b:
-            stmts       b_t_bck b   a:                      expr        b_back a    stmts
-            b:                      expr                    b_f_bck a   b:          get_l
-                                    b_t_bck b               expr                    incr_l
-                                    expr                    b:                      a:
-                                    c:                                              get_l
-                                    b:                                              b_loop b
-
-    expr
-    set_var local_4
-    expr
-    set_var local_5
-    get_var local_5
-    get_var local_3
-    branch_fwd a
- label b
-    [statment]*
-    get_var local_5
-    incr_var loc_3
- label a
-    get_var local_4
-    branch_loop b
-
+ expr       expr        b_fwd a     b_fwd a     a:          a:          a:          set_l 1   new_iter    new_handler a, b
+ b_f_fwd a  b_f_fwd a   b:          b:          stmts       stmts       stmts       set_l 2   b_fwd a     stmts
+ stmts      stmts       stmts       stmts       expr        expr        expr        set_l 3   b:          pop_handlers
+ a:         b_fwd b     a:          expr        b_f_bck a   b_fwd b     b_fwd b     b_fwd a   stmts       b_fwd c
+            a:          expr        b_fwd c                 stmts       stmts       b:        iter_next   a:
+            stmts       b_t_bck b   a:                      expr        b_back a    stmts     a:          stmts
+            b:                      expr                    b_f_bck a   b:          get_l     iter_done   b_fwd d
+                                    b_t_bck b               expr                    incr_l    b_f_bwd a   stmts
+                                    expr                    b:                      a:                    b_fwd d
+                                    c:                                              get_l                 d:
+                                    b:                                              b_loop b              pop_handlers
+                                                                                                          c:
 
 */
